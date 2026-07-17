@@ -192,8 +192,15 @@ on:
         required: false
       DOCKERHUB_TOKEN:
         required: false
+    outputs:
+      version:
+        description: Release version determined by the build step.
+        value: ${{ jobs.package.outputs.version }}
+      revision:
+        description: Source revision captured during release prep.
+        value: ${{ jobs.package.outputs.revision }}
 
-permissions: {}
+    permissions: {}
 
 concurrency:
   group: release-${{ github.ref }}
@@ -266,11 +273,3 @@ jobs:
       CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
-outputs:
-  version:
-    description: Release version determined by the build step.
-    value: ${{ jobs.package.outputs.version }}
-  revision:
-    description: Source revision captured during release prep.
-    value: ${{ jobs.package.outputs.revision }}
