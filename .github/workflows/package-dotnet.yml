@@ -200,7 +200,7 @@ on:
         description: Source revision captured during release prep.
         value: ${{ jobs.package.outputs.revision }}
 
-    permissions: {}
+permissions: {}
 
 concurrency:
   group: release-${{ github.ref }}
