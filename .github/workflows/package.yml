@@ -97,12 +97,14 @@ jobs:
             --output artifacts/version-check \
             -p:Version="$VERSION" \
             -p:SourceRevisionId="$GITHUB_SHA"
-          test "$(artifacts/version-check/$PACKAGE_NAME version)" = "$PACKAGE_NAME $VERSION"
+          test "$("artifacts/version-check/$PACKAGE_NAME" version)" = "$PACKAGE_NAME $VERSION"
       - name: Compare Nix package version
         env:
           VERSION: ${{ steps.version.outputs.version }}
           NIX_PACKAGE_NAME: ${{ inputs.nix_package_name }}
-        run: test "$(nix eval --impure --raw ".#packages.x86_64-linux.$NIX_PACKAGE_NAME.version")" = "$VERSION"
+        run: |
+          nix_attr=".#packages.x86_64-linux.${NIX_PACKAGE_NAME}.version"
+          test "$(nix eval --impure --raw "$nix_attr")" = "$VERSION"
       - name: Compare JReleaser project version
         env:
           VERSION: ${{ steps.version.outputs.version }}

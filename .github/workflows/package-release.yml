@@ -296,7 +296,6 @@ jobs:
           ./.github/workflows/scripts/sync-fork-branch.sh
       - name: Publish selected metadata packagers
         env:
-          PUBLISH_ARGS: ''
           JRELEASER_CONFIG: ${{ inputs.jreleaser_config }}
           JRELEASER_PROJECT_VERSION: ${{ inputs.version }}
           JRELEASER_GITHUB_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
@@ -305,17 +304,18 @@ jobs:
             echo '::error::PACKAGE_REPOSITORY_TOKEN is required for Homebrew/Scoop/Winget publication.' >&2
             exit 1
           fi
+          PUBLISH_ARGS=()
           if [ "$PUBLISH_HOMEBREW" = "true" ]; then
-            PUBLISH_ARGS="$PUBLISH_ARGS --packager brew"
+            PUBLISH_ARGS+=(--packager brew)
           fi
           if [ "$PUBLISH_SCOOP" = "true" ]; then
-            PUBLISH_ARGS="$PUBLISH_ARGS --packager scoop"
+            PUBLISH_ARGS+=(--packager scoop)
           fi
           if [ "$PUBLISH_WINGET" = "true" ]; then
-            PUBLISH_ARGS="$PUBLISH_ARGS --packager winget"
+            PUBLISH_ARGS+=(--packager winget)
           fi
 
-          if [ -z "$PUBLISH_ARGS" ]; then
+          if [ "${#PUBLISH_ARGS[@]}" -eq 0 ]; then
             echo 'No Homebrew/Scoop/Winget targets enabled; skipping publication step.'
             exit 0
           fi
@@ -326,7 +326,7 @@ jobs:
             -e JRELEASER_GITHUB_TOKEN \
             "$JRELEASER_IMAGE" \
             publish --strict --reproducible \
-            $PUBLISH_ARGS \
+            "${PUBLISH_ARGS[@]}" \
             --basedir /workspace \
             --config-file "$JRELEASER_CONFIG"
       - name: Open Winget PR in upstream repository
@@ -628,17 +628,16 @@ jobs:
           extra_nix_config: experimental-features = nix-command flakes
       - name: Build and smoke the Nix image
         env:
+          PACKAGE_VERSION: ${{ inputs.version }}
           VERSION: ${{ inputs.version }}
           REVISION: ${{ inputs.revision }}
+          NIX_IMAGE_VERSION: ${{ inputs.version }}
           OUTPUT: ${{ matrix.output }}
           IMAGE: ${{ matrix.image }}
           ARCH: ${{ matrix.arch }}
           SMOKE_KIND: ${{ matrix.smoke_kind }}
           CONTAINER_SMOKE_SCRIPT: ${{ inputs.container_smoke_script }}
         run: |
-          PACKAGE_VERSION="$VERSION" \
-          VERSION="$VERSION" \
-          NIX_IMAGE_VERSION="$VERSION" \
           nix build --impure ".#$OUTPUT" --out-link result-image
           loaded=$(docker load < result-image | sed -n 's/^Loaded image: //p' | tail -n 1)
           python3 "$CONTAINER_SMOKE_SCRIPT" \
