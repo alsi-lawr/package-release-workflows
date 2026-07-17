@@ -1,0 +1,276 @@
+name: Reusable Dotnet Package Release Pipeline
+
+on:
+  workflow_call:
+    inputs:
+      package_name:
+        description: Package identifier used in packaging artifacts and manifests.
+        type: string
+        required: true
+      command_name:
+        description: Installed command used for smoke verification.
+        type: string
+        required: true
+      release_name:
+        description: Human-friendly product title used for release titles.
+        type: string
+        required: true
+      container_smoke_script:
+        description: Script used to validate GHCR images.
+        type: string
+        required: true
+      state_directory_name:
+        description: Per-user marker directory name used by smoke tests.
+        type: string
+        required: true
+      smoke_script:
+        description: Smoke script path.
+        type: string
+        required: true
+      brew_formula_path:
+        description: Full path to brew formula artifact.
+        type: string
+        required: true
+      scoop_manifest_path:
+        description: Full path to scoop manifest artifact.
+        type: string
+        required: true
+      chocolatey_nuspec_path:
+        description: Full path to chocolatey nuspec.
+        type: string
+        required: true
+      winget_manifest_prefix:
+        description: Path prefix to winget manifests (version appended automatically).
+        type: string
+        required: true
+      winget_identifier:
+        description: WinGet package identifier to uninstall and validate.
+        type: string
+        required: true
+      release_title_prefix:
+        description: Release title prefix used for GitHub release titles.
+        type: string
+        required: true
+      publish_github_release:
+        description: Create GitHub release.
+        type: boolean
+        required: true
+      publish_homebrew:
+        description: Publish via JReleaser Homebrew packager.
+        type: boolean
+        required: true
+      publish_scoop:
+        description: Publish via JReleaser Scoop packager.
+        type: boolean
+        required: true
+      publish_winget:
+        description: Publish via JReleaser Winget and open PR.
+        type: boolean
+        required: true
+      publish_nixpkgs:
+        description: Push nixpkgs update and open PR.
+        type: boolean
+        required: true
+      publish_chocolatey:
+        description: Build and push Chocolatey package artifact.
+        type: boolean
+        required: true
+      publish_docker_hub:
+        description: Build and publish Docker Hub images.
+        type: boolean
+        required: true
+      publish_nix_images:
+        description: Build and publish GHCR images.
+        type: boolean
+        required: true
+      promote_latest:
+        description: Promote version tags to :latest on Docker Hub and GHCR.
+        type: boolean
+        required: true
+      run_package_tests:
+        description: Execute optional platform lifecycle tests via separate workflow.
+        type: boolean
+        required: true
+      run_homebrew_test:
+        description: Run Homebrew lifecycle test job.
+        type: boolean
+        required: true
+      run_windows_packaging_tests:
+        description: Run Scoop + Chocolatey lifecycle tests.
+        type: boolean
+        required: true
+      run_winget_test:
+        description: Run WinGet manifest validation and lifecycle test.
+        type: boolean
+        required: true
+      jreleaser_image:
+        description: JReleaser container image.
+        type: string
+        required: true
+      jreleaser_config:
+        description: Path to JReleaser config file.
+        type: string
+        required: true
+      winget_upstream_repo:
+        description: Upstream repository for WinGet PRs.
+        type: string
+        required: true
+      winget_fork_owner:
+        description: Fork owner for WinGet branch creation.
+        type: string
+        required: true
+      winget_fork_repo:
+        description: Fork repository for WinGet branch creation.
+        type: string
+        required: true
+      winget_branch_prefix:
+        description: Reusable branch prefix for winget updates.
+        type: string
+        required: true
+      nix_upstream_repo:
+        description: Upstream repository for Nixpkgs PRs.
+        type: string
+        required: true
+      nix_fork_owner:
+        description: Fork owner for Nix updates.
+        type: string
+        required: true
+      nix_fork_repo:
+        description: Fork repository for Nix updates.
+        type: string
+        required: true
+      nix_branch_prefix:
+        description: Reusable branch prefix for nix updates.
+        type: string
+        required: true
+      nix_package_name:
+        description: Nix package attribute name to update.
+        type: string
+        required: true
+      docker_build_matrix:
+        description: JSON list for Docker Hub image build jobs.
+        type: string
+        required: true
+      docker_manifest_images:
+        description: JSON array of Docker Hub images for architecture manifest creation.
+        type: string
+        required: true
+      ghcr_build_matrix:
+        description: JSON list for GHCR image build jobs.
+        type: string
+        required: true
+      ghcr_manifest_images:
+        description: JSON array of GHCR images for architecture manifest creation.
+        type: string
+        required: true
+      promotion_image_matrix:
+        description: JSON array of images to promote as :latest.
+        type: string
+        required: true
+      dotnet_version:
+        description: .NET version to install.
+        type: string
+        required: true
+      dotnet_project_path:
+        description: Path to the .NET project file.
+        type: string
+        required: true
+      package_publish_matrix:
+        description: JSON array describing publish matrix entries.
+        type: string
+        required: true
+      package_smoke_script:
+        description: Smoke script to validate the published binary.
+        type: string
+        required: true
+    secrets:
+      PACKAGE_REPOSITORY_TOKEN:
+        required: false
+      CHOCOLATEY_API_KEY:
+        required: false
+      DOCKERHUB_USERNAME:
+        required: false
+      DOCKERHUB_TOKEN:
+        required: false
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Build and prepare packaging assets
+    uses: ./.github/workflows/package.yml
+    with:
+      package_name: ${{ inputs.package_name }}
+      dotnet_version: ${{ inputs.dotnet_version }}
+      dotnet_project_path: ${{ inputs.dotnet_project_path }}
+      package_smoke_script: ${{ inputs.package_smoke_script }}
+      package_publish_matrix: ${{ inputs.package_publish_matrix }}
+      jreleaser_image: ${{ inputs.jreleaser_image }}
+      jreleaser_config: ${{ inputs.jreleaser_config }}
+      nix_package_name: ${{ inputs.nix_package_name }}
+
+  package-release:
+    name: Publish release
+    needs: package
+    uses: ./.github/workflows/package-release.yml
+    with:
+      version: ${{ needs.package.outputs.version }}
+      revision: ${{ needs.package.outputs.revision }}
+      package_name: ${{ inputs.package_name }}
+      command_name: ${{ inputs.command_name }}
+      release_name: ${{ inputs.release_name }}
+      state_directory_name: ${{ inputs.state_directory_name }}
+      smoke_script: ${{ inputs.smoke_script }}
+      brew_formula_path: ${{ inputs.brew_formula_path }}
+      scoop_manifest_path: ${{ inputs.scoop_manifest_path }}
+      chocolatey_nuspec_path: ${{ inputs.chocolatey_nuspec_path }}
+      winget_manifest_prefix: ${{ inputs.winget_manifest_prefix }}
+      winget_identifier: ${{ inputs.winget_identifier }}
+      release_title_prefix: ${{ inputs.release_title_prefix }}
+      publish_github_release: ${{ inputs.publish_github_release }}
+      publish_homebrew: ${{ inputs.publish_homebrew }}
+      publish_scoop: ${{ inputs.publish_scoop }}
+      publish_winget: ${{ inputs.publish_winget }}
+      publish_nixpkgs: ${{ inputs.publish_nixpkgs }}
+      publish_chocolatey: ${{ inputs.publish_chocolatey }}
+      publish_docker_hub: ${{ inputs.publish_docker_hub }}
+      publish_nix_images: ${{ inputs.publish_nix_images }}
+      promote_latest: ${{ inputs.promote_latest }}
+      run_package_tests: ${{ inputs.run_package_tests }}
+      run_homebrew_test: ${{ inputs.run_homebrew_test }}
+      run_windows_packaging_tests: ${{ inputs.run_windows_packaging_tests }}
+      run_winget_test: ${{ inputs.run_winget_test }}
+      container_smoke_script: ${{ inputs.container_smoke_script }}
+      jreleaser_image: ${{ inputs.jreleaser_image }}
+      jreleaser_config: ${{ inputs.jreleaser_config }}
+      winget_upstream_repo: ${{ inputs.winget_upstream_repo }}
+      winget_fork_owner: ${{ inputs.winget_fork_owner }}
+      winget_fork_repo: ${{ inputs.winget_fork_repo }}
+      winget_branch_prefix: ${{ inputs.winget_branch_prefix }}
+      nix_upstream_repo: ${{ inputs.nix_upstream_repo }}
+      nix_fork_owner: ${{ inputs.nix_fork_owner }}
+      nix_fork_repo: ${{ inputs.nix_fork_repo }}
+      nix_branch_prefix: ${{ inputs.nix_branch_prefix }}
+      nix_package_name: ${{ inputs.nix_package_name }}
+      docker_build_matrix: ${{ inputs.docker_build_matrix }}
+      docker_manifest_images: ${{ inputs.docker_manifest_images }}
+      ghcr_build_matrix: ${{ inputs.ghcr_build_matrix }}
+      ghcr_manifest_images: ${{ inputs.ghcr_manifest_images }}
+      promotion_image_matrix: ${{ inputs.promotion_image_matrix }}
+    secrets:
+      PACKAGE_REPOSITORY_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
+      CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+outputs:
+  version:
+    description: Release version determined by the build step.
+    value: ${{ jobs.package.outputs.version }}
+  revision:
+    description: Source revision captured during release prep.
+    value: ${{ jobs.package.outputs.revision }}

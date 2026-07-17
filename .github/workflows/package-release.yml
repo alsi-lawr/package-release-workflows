@@ -1,0 +1,722 @@
+name: Reusable Package Release Core
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Release version without the v prefix.
+        type: string
+        required: true
+      revision:
+        description: Source revision used for the package.
+        type: string
+        required: true
+      package_name:
+        description: Package identifier used in packaging artifacts and manifests.
+        type: string
+        required: true
+      command_name:
+        description: Installed command used for smoke verification.
+        type: string
+        required: true
+      release_name:
+        description: Human-friendly product title used for release titles.
+        type: string
+        required: true
+      container_smoke_script:
+        description: Script used to validate GHCR images.
+        type: string
+        required: true
+      state_directory_name:
+        description: Per-user marker directory name used by smoke tests.
+        type: string
+        required: true
+      smoke_script:
+        description: Smoke script path.
+        type: string
+        required: true
+      brew_formula_path:
+        description: Full path to brew formula artifact.
+        type: string
+        required: true
+      scoop_manifest_path:
+        description: Full path to scoop manifest artifact.
+        type: string
+        required: true
+      chocolatey_nuspec_path:
+        description: Full path to chocolatey nuspec.
+        type: string
+        required: true
+      winget_manifest_prefix:
+        description: Path prefix to winget manifests (version appended automatically).
+        type: string
+        required: true
+      winget_identifier:
+        description: WinGet package identifier to uninstall and validate.
+        type: string
+        required: true
+      release_title_prefix:
+        description: Release title prefix used for GitHub release titles.
+        type: string
+        required: true
+      publish_github_release:
+        description: Create GitHub release.
+        type: boolean
+        required: true
+      publish_homebrew:
+        description: Publish via JReleaser Homebrew packager.
+        type: boolean
+        required: true
+      publish_scoop:
+        description: Publish via JReleaser Scoop packager.
+        type: boolean
+        required: true
+      publish_winget:
+        description: Publish via JReleaser Winget and open PR.
+        type: boolean
+        required: true
+      publish_nixpkgs:
+        description: Push nixpkgs update and open PR.
+        type: boolean
+        required: true
+      publish_chocolatey:
+        description: Build and push Chocolatey package artifact.
+        type: boolean
+        required: true
+      publish_docker_hub:
+        description: Build and publish Docker Hub images.
+        type: boolean
+        required: true
+      publish_nix_images:
+        description: Build and publish GHCR images.
+        type: boolean
+        required: true
+      promote_latest:
+        description: Promote version tags to :latest on Docker Hub and GHCR.
+        type: boolean
+        required: true
+      run_package_tests:
+        description: Execute optional platform lifecycle tests via separate workflow.
+        type: boolean
+        required: true
+      run_homebrew_test:
+        description: Run Homebrew lifecycle test job.
+        type: boolean
+        required: true
+      run_windows_packaging_tests:
+        description: Run Scoop + Chocolatey lifecycle tests.
+        type: boolean
+        required: true
+      run_winget_test:
+        description: Run WinGet manifest validation and lifecycle test.
+        type: boolean
+        required: true
+      jreleaser_image:
+        description: JReleaser container image.
+        type: string
+        required: true
+      jreleaser_config:
+        description: Path to JReleaser config file.
+        type: string
+        required: true
+      winget_upstream_repo:
+        description: Upstream repository for WinGet PRs.
+        type: string
+        required: true
+      winget_fork_owner:
+        description: Fork owner for WinGet branch creation.
+        type: string
+        required: true
+      winget_fork_repo:
+        description: Fork repository for WinGet branch creation.
+        type: string
+        required: true
+      winget_branch_prefix:
+        description: Reusable branch prefix for winget updates.
+        type: string
+        required: true
+      nix_upstream_repo:
+        description: Upstream repository for Nixpkgs PRs.
+        type: string
+        required: true
+      nix_fork_owner:
+        description: Fork owner for Nix updates.
+        type: string
+        required: true
+      nix_fork_repo:
+        description: Fork repository for Nix updates.
+        type: string
+        required: true
+      nix_branch_prefix:
+        description: Reusable branch prefix for nix updates.
+        type: string
+        required: true
+      nix_package_name:
+        description: Nix package attribute name to update.
+        type: string
+        required: true
+      docker_build_matrix:
+        description: JSON list for Docker Hub image build jobs.
+        type: string
+        required: true
+      docker_manifest_images:
+        description: JSON array of Docker Hub images for architecture manifest creation.
+        type: string
+        required: true
+      ghcr_build_matrix:
+        description: JSON list for GHCR image build jobs.
+        type: string
+        required: true
+      ghcr_manifest_images:
+        description: JSON array of GHCR images for architecture manifest creation.
+        type: string
+        required: true
+      promotion_image_matrix:
+        description: JSON array of images to promote as :latest.
+        type: string
+        required: true
+    secrets:
+      PACKAGE_REPOSITORY_TOKEN:
+        required: false
+      CHOCOLATEY_API_KEY:
+        required: false
+      DOCKERHUB_USERNAME:
+        required: false
+      DOCKERHUB_TOKEN:
+        required: false
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validation:
+    uses: ./.github/workflows/validation.yml
+    with:
+      version: ${{ inputs.version }}
+
+  package-tests:
+    name: Test packaging lifecycle targets
+    if: ${{ inputs.run_package_tests }}
+    needs:
+      - validation
+    uses: ./.github/workflows/release-package-tests.yml
+    with:
+      version: ${{ inputs.version }}
+      command_name: ${{ inputs.command_name }}
+      state_directory_name: ${{ inputs.state_directory_name }}
+      smoke_script: ${{ inputs.smoke_script }}
+      brew_formula_path: ${{ inputs.brew_formula_path }}
+      scoop_manifest_path: ${{ inputs.scoop_manifest_path }}
+      chocolatey_nuspec_path: ${{ inputs.chocolatey_nuspec_path }}
+      winget_manifest_prefix: ${{ inputs.winget_manifest_prefix }}
+      winget_identifier: ${{ inputs.winget_identifier }}
+      run_homebrew_test: ${{ inputs.run_homebrew_test }}
+      run_windows_packaging_tests: ${{ inputs.run_windows_packaging_tests }}
+      run_winget_test: ${{ inputs.run_winget_test }}
+
+  github-release:
+    name: Create the GitHub release
+    if: ${{ inputs.publish_github_release }}
+    needs:
+      - validation
+      - docker-hub-gate
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v8
+        with:
+          name: release-assets-${{ inputs.version }}
+          path: artifacts/release
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          RELEASE_TITLE_PREFIX: ${{ inputs.release_title_prefix }}
+          RELEASE_NAME: ${{ inputs.release_name }}
+        run: |
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release v$VERSION already exists; refusing to overwrite it." >&2
+            exit 1
+          fi
+          gh release create "v$VERSION" artifacts/release/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "${RELEASE_TITLE_PREFIX} v${VERSION}" \
+            --generate-notes \
+            --latest=false
+
+  publish-homebrew-scoop-winget:
+    name: Publish Homebrew/Scoop/Winget metadata when authorised
+    if: ${{ inputs.publish_homebrew || inputs.publish_scoop || inputs.publish_winget }}
+    needs:
+      - package-tests
+      - validation
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    env:
+      JRELEASER_IMAGE: ${{ inputs.jreleaser_image }}
+      JRELEASER_PROJECT_VERSION: ${{ inputs.version }}
+      JRELEASER_GITHUB_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
+      PUBLISH_HOMEBREW: ${{ inputs.publish_homebrew }}
+      PUBLISH_SCOOP: ${{ inputs.publish_scoop }}
+      PUBLISH_WINGET: ${{ inputs.publish_winget }}
+      WINGET_UPSTREAM_REPO: ${{ inputs.winget_upstream_repo }}
+      WINGET_FORK_OWNER: ${{ inputs.winget_fork_owner }}
+      WINGET_FORK_REPO: ${{ inputs.winget_fork_repo }}
+      WINGET_BRANCH_PREFIX: ${{ inputs.winget_branch_prefix }}
+    steps:
+      - name: Check out publication configuration
+        uses: actions/checkout@v7
+      - name: Download the prepared JReleaser workspace
+        uses: actions/download-artifact@v8
+        with:
+          name: jreleaser-workspace-${{ inputs.version }}
+          path: out/jreleaser
+      - name: Prepare winget fork branch from upstream default branch
+        id: sync-winget-branch
+        if: ${{ inputs.publish_winget }}
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
+          SYNC_VERSION: ${{ inputs.version }}
+          SYNC_UPSTREAM_REPO: ${{ inputs.winget_upstream_repo }}
+          SYNC_FORK_OWNER: ${{ inputs.winget_fork_owner }}
+          SYNC_FORK_REPO: ${{ inputs.winget_fork_repo }}
+          SYNC_BRANCH_PREFIX: ${{ inputs.winget_branch_prefix }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo '::error::PACKAGE_REPOSITORY_TOKEN is required for winget branch sync.' >&2
+            exit 1
+          fi
+          ./.github/workflows/scripts/sync-fork-branch.sh
+      - name: Publish selected metadata packagers
+        env:
+          PUBLISH_ARGS: ''
+          JRELEASER_CONFIG: ${{ inputs.jreleaser_config }}
+          JRELEASER_PROJECT_VERSION: ${{ inputs.version }}
+          JRELEASER_GITHUB_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
+        run: |
+          if [ -z "$JRELEASER_GITHUB_TOKEN" ]; then
+            echo '::error::PACKAGE_REPOSITORY_TOKEN is required for Homebrew/Scoop/Winget publication.' >&2
+            exit 1
+          fi
+          if [ "$PUBLISH_HOMEBREW" = "true" ]; then
+            PUBLISH_ARGS="$PUBLISH_ARGS --packager brew"
+          fi
+          if [ "$PUBLISH_SCOOP" = "true" ]; then
+            PUBLISH_ARGS="$PUBLISH_ARGS --packager scoop"
+          fi
+          if [ "$PUBLISH_WINGET" = "true" ]; then
+            PUBLISH_ARGS="$PUBLISH_ARGS --packager winget"
+          fi
+
+          if [ -z "$PUBLISH_ARGS" ]; then
+            echo 'No Homebrew/Scoop/Winget targets enabled; skipping publication step.'
+            exit 0
+          fi
+
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$PWD:/workspace" \
+            -e JRELEASER_PROJECT_VERSION \
+            -e JRELEASER_GITHUB_TOKEN \
+            "$JRELEASER_IMAGE" \
+            publish --strict --reproducible \
+            $PUBLISH_ARGS \
+            --basedir /workspace \
+            --config-file "$JRELEASER_CONFIG"
+      - name: Open Winget PR in upstream repository
+        if: ${{ inputs.publish_winget }}
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          WINGET_UPSTREAM: ${{ inputs.winget_upstream_repo }}
+          WINGET_FORK_OWNER: ${{ inputs.winget_fork_owner }}
+          WINGET_FORK_REPO: ${{ inputs.winget_fork_repo }}
+          WINGET_BRANCH: ${{ steps.sync-winget-branch.outputs.branch }}
+          WINGET_UPSTREAM_DEFAULT_BRANCH: ${{ steps.sync-winget-branch.outputs.upstream_default_branch }}
+          WINGET_RELEASE_NAME: ${{ inputs.release_name }}
+        run: |
+          if test -z "$GH_TOKEN"; then
+            echo '::error::PACKAGE_REPOSITORY_TOKEN is required for Winget PR creation.' >&2
+            exit 1
+          fi
+          if test -z "$WINGET_BRANCH"; then
+            echo '::error::Winget branch was not prepared; cannot create PR.' >&2
+            exit 1
+          fi
+          if test -z "$WINGET_UPSTREAM_DEFAULT_BRANCH"; then
+            echo '::error::Winget upstream default branch was not resolved; cannot create PR.' >&2
+            exit 1
+          fi
+
+          branch="$WINGET_BRANCH"
+          head="${WINGET_FORK_OWNER}:${branch}"
+
+          existing_open=$(gh pr list --repo "$WINGET_UPSTREAM" --state open --head "$head" --json number --jq 'length')
+          if [ "$existing_open" -gt 0 ]; then
+            echo "Open PR already exists for $head."
+            exit 1
+          fi
+
+          if ! git ls-remote --heads "https://github.com/${WINGET_FORK_OWNER}/${WINGET_FORK_REPO}.git" "$branch" | grep -q "$branch"; then
+            echo '::error::Expected winget branch was not found in fork.' >&2
+            exit 1
+          fi
+
+          gh pr create \
+            --repo "$WINGET_UPSTREAM" \
+            --base "$WINGET_UPSTREAM_DEFAULT_BRANCH" \
+            --head "$head" \
+            --title "chore: release ${WINGET_RELEASE_NAME} v${VERSION} manifests" \
+            --body "Automated ${WINGET_RELEASE_NAME} WinGet manifest update for v${VERSION}."
+
+  publish-nixpkgs:
+    name: Publish Nix package and PR when authorised
+    if: ${{ inputs.publish_nixpkgs }}
+    needs:
+      - package-tests
+      - validation
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    env:
+      GITHUB_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
+      GH_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
+      VERSION: ${{ inputs.version }}
+      NIX_UPSTREAM: ${{ inputs.nix_upstream_repo }}
+      NIX_FORK_OWNER: ${{ inputs.nix_fork_owner }}
+      NIX_FORK_REPO: ${{ inputs.nix_fork_repo }}
+      NIX_BRANCH_PREFIX: ${{ inputs.nix_branch_prefix }}
+      NIX_PACKAGE: ${{ inputs.nix_package_name }}
+      RELEASE_NAME: ${{ inputs.release_name }}
+    steps:
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: experimental-features = nix-command flakes
+      - name: Sync Nixpkgs fork branch from upstream default branch
+        id: sync-nix-branch
+        env:
+          SYNC_VERSION: ${{ inputs.version }}
+          SYNC_UPSTREAM_REPO: ${{ inputs.nix_upstream_repo }}
+          SYNC_FORK_OWNER: ${{ inputs.nix_fork_owner }}
+          SYNC_FORK_REPO: ${{ inputs.nix_fork_repo }}
+          SYNC_BRANCH_PREFIX: ${{ inputs.nix_branch_prefix }}
+        run: ./.github/workflows/scripts/sync-fork-branch.sh
+      - name: Update Nixpkgs, push branch, and open PR
+        env:
+          GH_TOKEN: ${{ env.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+          VERSION: ${{ env.VERSION }}
+          NIX_UPSTREAM: ${{ env.NIX_UPSTREAM }}
+          NIX_FORK_OWNER: ${{ env.NIX_FORK_OWNER }}
+          NIX_BRANCH: ${{ steps.sync-nix-branch.outputs.branch }}
+          NIX_UPSTREAM_DEFAULT_BRANCH: ${{ steps.sync-nix-branch.outputs.upstream_default_branch }}
+          NIX_PACKAGE: ${{ env.NIX_PACKAGE }}
+          RELEASE_NAME: ${{ env.RELEASE_NAME }}
+        run: |
+          if test -z "$GH_TOKEN"; then
+            echo '::error::PACKAGE_REPOSITORY_TOKEN is required for nixpkgs publication.' >&2
+            exit 1
+          fi
+          if test -z "$NIX_BRANCH"; then
+            echo '::error::Nix branch was not prepared; cannot create PR.' >&2
+            exit 1
+          fi
+          if test -z "$NIX_UPSTREAM_DEFAULT_BRANCH"; then
+            echo '::error::Nix upstream default branch was not resolved; cannot create PR.' >&2
+            exit 1
+          fi
+
+          git clone --depth 1 --filter=blob:none --single-branch --branch "$NIX_BRANCH" \
+            "https://x-access-token:${GH_TOKEN}@github.com/${NIX_FORK_OWNER}/${NIX_FORK_REPO}.git" nixpkgs
+          cd nixpkgs
+          git checkout "$NIX_BRANCH"
+
+          if git remote get-url upstream >/dev/null 2>&1; then
+            git remote set-url upstream "https://github.com/$NIX_UPSTREAM.git"
+          else
+            git remote add upstream "https://github.com/$NIX_UPSTREAM.git"
+          fi
+
+          if ! current_version="$(nix eval --impure --raw ".#legacyPackages.x86_64-linux.${NIX_PACKAGE}.version" 2>/dev/null)"; then
+            echo "::error::${NIX_PACKAGE} is not present in this nixpkgs revision." >&2
+            exit 1
+          fi
+          if [ "$current_version" = "$VERSION" ]; then
+            echo "Nix package is already at v${VERSION}; no update necessary."
+            exit 1
+          fi
+
+          nix run github:nix-community/nixpkgs-update -- \
+            update "${NIX_PACKAGE} ${current_version} ${VERSION}"
+
+          if git status --porcelain | grep -q .; then
+            git add -A
+            if ! git diff --cached --quiet; then
+              git -c user.name='github-actions[bot]' \
+                -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+                commit -m "nixpkgs: update ${NIX_PACKAGE} to v${VERSION}"
+            fi
+          fi
+
+          local_head="$(git rev-parse HEAD)"
+          remote_head="$(git rev-parse "origin/${NIX_BRANCH}")"
+          if [ "$local_head" = "$remote_head" ]; then
+            echo '::error::Nixpkgs update produced no file changes; cannot create PR.' >&2
+            exit 1
+          fi
+
+          git push origin "$NIX_BRANCH"
+
+          head="${NIX_FORK_OWNER}:${NIX_BRANCH}"
+          existing_open=$(gh pr list --repo "$NIX_UPSTREAM" --state open --head "$head" --json number --jq 'length')
+          if [ "$existing_open" -gt 0 ]; then
+            echo "Open PR already exists for $head."
+            exit 1
+          fi
+
+          gh pr create \
+            --repo "$NIX_UPSTREAM" \
+            --base "$NIX_UPSTREAM_DEFAULT_BRANCH" \
+            --head "$head" \
+            --title "nixpkgs: update ${NIX_PACKAGE} to v${VERSION}" \
+            --body "Automated ${RELEASE_NAME} nixpkgs update for v${VERSION}."
+
+  publish-chocolatey:
+    name: Build and optionally submit the Chocolatey package
+    if: ${{ inputs.publish_chocolatey }}
+    needs:
+      - package-tests
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      PACKAGE_NAME: ${{ inputs.package_name }}
+      VERSION: ${{ inputs.version }}
+      CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+    steps:
+      - name: Download JReleaser package metadata
+        uses: actions/download-artifact@v8
+        with:
+          name: package-metadata-${{ inputs.version }}
+          path: artifacts/package-metadata
+      - name: Build the reviewable package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts/chocolatey | Out-Null
+          choco pack "${{ inputs.chocolatey_nuspec_path }}" --output-directory artifacts/chocolatey
+      - name: Upload the reviewable Chocolatey package
+        uses: actions/upload-artifact@v7
+        with:
+          name: chocolatey-${{ inputs.version }}
+          path: artifacts/chocolatey/${{ inputs.package_name }}.${{ inputs.version }}.nupkg
+          if-no-files-found: error
+          retention-days: 30
+      - name: Submit only when the API key exists
+        shell: pwsh
+        env:
+          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CHOCOLATEY_API_KEY)) {
+              Write-Host '::notice::CHOCOLATEY_API_KEY is absent; upload is skipped and availability remains pending moderation.'
+              exit 1
+          }
+          choco push "artifacts/chocolatey/${{ inputs.package_name }}.${{ inputs.version }}.nupkg" `
+            --source https://push.chocolatey.org/ `
+            --api-key $env:CHOCOLATEY_API_KEY
+          Write-Host '::notice::Chocolatey upload completed; public availability remains pending moderation.'
+
+  docker-hub-gate:
+    name: Require Docker Hub release credentials
+    if: ${{ inputs.publish_docker_hub }}
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Fail unless both mandatory credentials exist
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          test -n "$DOCKERHUB_USERNAME" || { echo 'DOCKERHUB_USERNAME is required.' >&2; exit 1; }
+          test -n "$DOCKERHUB_TOKEN" || { echo 'DOCKERHUB_TOKEN is required.' >&2; exit 1; }
+
+  docker-hub-images:
+    name: Publish Docker Hub ${{ matrix.kind }} ${{ matrix.arch }}
+    if: ${{ inputs.publish_docker_hub }}
+    needs:
+      - docker-hub-gate
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(inputs.docker_build_matrix) }}
+    steps:
+      - name: Check out the release commit
+        uses: actions/checkout@v7
+      - name: Log in to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: echo "$DOCKERHUB_TOKEN" | docker login docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
+      - name: Build and push the architecture tag
+        env:
+          VERSION: ${{ inputs.version }}
+          REVISION: ${{ inputs.revision }}
+          DOCKERFILE: ${{ matrix.dockerfile }}
+          IMAGE: ${{ matrix.image }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          docker build \
+            --file "$DOCKERFILE" \
+            --tag "$IMAGE:${VERSION}-${ARCH}" \
+            --build-arg PACKAGE_VERSION="$VERSION" \
+            --build-arg VERSION="$VERSION" \
+            --build-arg APP_VERSION="$VERSION" \
+            --build-arg SOURCE_REVISION_ID="$REVISION" \
+            .
+          docker push "$IMAGE:${VERSION}-${ARCH}"
+
+  docker-hub-manifests:
+    name: Publish Docker Hub ${{ matrix.image }} manifest
+    if: ${{ inputs.publish_docker_hub }}
+    needs:
+      - docker-hub-images
+    runs-on: ubuntu-26.04
+    strategy:
+      matrix:
+        image: ${{ fromJson(inputs.docker_manifest_images) }}
+    steps:
+      - name: Log in to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: echo "$DOCKERHUB_TOKEN" | docker login docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
+      - name: Publish the multi-architecture version tag
+        env:
+          VERSION: ${{ inputs.version }}
+          IMAGE: ${{ matrix.image }}
+        run: |
+          docker buildx imagetools create \
+            --tag "${IMAGE}:${VERSION}" \
+            "${IMAGE}:${VERSION}-amd64" \
+            "${IMAGE}:${VERSION}-arm64"
+
+  nix-images:
+    name: Build, smoke, and publish Nix ${{ matrix.kind }} ${{ matrix.arch }}
+    if: ${{ inputs.publish_nix_images }}
+    needs:
+      - docker-hub-gate
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(inputs.ghcr_build_matrix) }}
+    steps:
+      - name: Check out the release commit
+        uses: actions/checkout@v7
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: experimental-features = nix-command flakes
+      - name: Build and smoke the Nix image
+        env:
+          VERSION: ${{ inputs.version }}
+          REVISION: ${{ inputs.revision }}
+          OUTPUT: ${{ matrix.output }}
+          IMAGE: ${{ matrix.image }}
+          ARCH: ${{ matrix.arch }}
+          SMOKE_KIND: ${{ matrix.smoke_kind }}
+          CONTAINER_SMOKE_SCRIPT: ${{ inputs.container_smoke_script }}
+        run: |
+          PACKAGE_VERSION="$VERSION" \
+          VERSION="$VERSION" \
+          NIX_IMAGE_VERSION="$VERSION" \
+          nix build --impure ".#$OUTPUT" --out-link result-image
+          loaded=$(docker load < result-image | sed -n 's/^Loaded image: //p' | tail -n 1)
+          python3 "$CONTAINER_SMOKE_SCRIPT" \
+            --image "$loaded" \
+            --kind "$SMOKE_KIND" \
+            --version "$VERSION" \
+            --revision "$REVISION"
+          docker tag "$loaded" "${IMAGE}:${VERSION}-${ARCH}"
+      - name: Log in to GHCR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+      - name: Push the architecture tag
+        env:
+          VERSION: ${{ inputs.version }}
+          IMAGE: ${{ matrix.image }}
+          ARCH: ${{ matrix.arch }}
+        run: docker push "${IMAGE}:${VERSION}-${ARCH}"
+
+  nix-manifests:
+    name: Publish Nix GHCR ${{ matrix.image }} manifest
+    if: ${{ inputs.publish_nix_images }}
+    needs:
+      - nix-images
+    runs-on: ubuntu-26.04
+    permissions:
+      packages: write
+    strategy:
+      matrix:
+        image: ${{ fromJson(inputs.ghcr_manifest_images) }}
+    steps:
+      - name: Log in to GHCR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+      - name: Publish the multi-architecture version tag
+        env:
+          VERSION: ${{ inputs.version }}
+          IMAGE: ${{ matrix.image }}
+        run: |
+          docker buildx imagetools create \
+            --tag "${IMAGE}:${VERSION}" \
+            "${IMAGE}:${VERSION}-amd64" \
+            "${IMAGE}:${VERSION}-arm64"
+
+  promote-latest:
+    name: Promote the release version to latest
+    if: ${{ inputs.promote_latest && (inputs.publish_github_release || inputs.publish_homebrew || inputs.publish_scoop || inputs.publish_winget || inputs.publish_chocolatey || inputs.publish_nixpkgs || inputs.publish_docker_hub || inputs.publish_nix_images) }}
+    needs:
+      - github-release
+      - publish-homebrew-scoop-winget
+      - publish-nixpkgs
+      - publish-chocolatey
+      - docker-hub-manifests
+      - nix-manifests
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Log in to Docker Hub and GHCR
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "$DOCKERHUB_TOKEN" | docker login docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
+          echo "$GH_TOKEN" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+      - name: Promote the version tags
+        env:
+          VERSION: ${{ inputs.version }}
+          IMAGES: ${{ inputs.promotion_image_matrix }}
+        run: |
+          for image in $(echo "$IMAGES" | jq -r '.[]'); do
+            docker buildx imagetools create --tag "$image:latest" "$image:$VERSION"
+          done
+      - name: Promote the GitHub release to Latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --latest
