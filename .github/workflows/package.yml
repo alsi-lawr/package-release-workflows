@@ -19,6 +19,10 @@ on:
         description: Smoke script to validate the published binary.
         type: string
         required: true
+      package_metadata_finalize_script:
+        description: Script that finalizes caller-specific package metadata.
+        type: string
+        required: true
       package_publish_matrix:
         description: JSON array describing publish matrix entries.
         type: string
@@ -43,7 +47,10 @@ on:
         description: Source revision used for the package.
         value: ${{ jobs.version.outputs.revision }}
 
-permissions: {}
+permissions:
+  contents: read
+  attestations: write
+  id-token: write
 
 jobs:
   version:
@@ -69,8 +76,6 @@ jobs:
           extra_nix_config: experimental-features = nix-command flakes
       - name: Derive one strict X.Y.Z version
         id: version
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           tag="$GITHUB_REF_NAME"
           if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
@@ -79,10 +84,6 @@ jobs:
           fi
           version="${tag#v}"
           test "v$version" = "$tag"
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $tag already exists; refusing to overwrite it." >&2
-            exit 1
-          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "revision=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
       - name: Compare .NET CLI output
@@ -101,6 +102,7 @@ jobs:
       - name: Compare Nix package version
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          PACKAGE_VERSION: ${{ steps.version.outputs.version }}
           NIX_PACKAGE_NAME: ${{ inputs.nix_package_name }}
         run: |
           nix_attr=".#packages.x86_64-linux.${NIX_PACKAGE_NAME}.version"
@@ -178,6 +180,10 @@ jobs:
       - version
       - native-publish
     runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      attestations: write
+      id-token: write
     env:
       JRELEASER_IMAGE: ${{ inputs.jreleaser_image }}
       JRELEASER_PROJECT_VERSION: ${{ needs.version.outputs.version }}
@@ -192,6 +198,14 @@ jobs:
           pattern: publish-*
           path: artifacts/publish
           merge-multiple: true
+      - name: Restore Unix command executable modes
+        env:
+          PACKAGE_NAME: ${{ inputs.package_name }}
+        run: |
+          chmod +x \
+            "artifacts/publish/linux-x64/$PACKAGE_NAME" \
+            "artifacts/publish/linux-arm64/$PACKAGE_NAME" \
+            "artifacts/publish/osx-arm64/$PACKAGE_NAME"
       - name: Assemble archives and package metadata
         run: |
           for phase in assemble checksum prepare; do
@@ -204,14 +218,67 @@ jobs:
               --basedir /workspace \
               --config-file "$JRELEASER_CONFIG"
           done
-      - name: Collect release assets and package metadata
+      - name: Collect release assets and finalize package metadata
         run: |
           mkdir -p artifacts/release artifacts/package-metadata
           find out/jreleaser/assemble -maxdepth 4 -type f \
             \( -name '*.tar.gz' -o -name '*.zip' \) \
             -exec cp {} artifacts/release/ \;
           cp out/jreleaser/checksums/checksums_sha256.txt artifacts/release/
+          "${{ inputs.package_metadata_finalize_script }}" \
+            --version "${{ needs.version.outputs.version }}" \
+            --release-directory artifacts/release \
+            --metadata-directory out/jreleaser/prepare
           cp -R out/jreleaser/prepare/. artifacts/package-metadata/
+      - name: Verify Unix command modes in assembled archives
+        env:
+          PACKAGE_NAME: ${{ inputs.package_name }}
+        run: |
+          verification_root="$(mktemp -d)"
+          trap 'rm -rf "$verification_root"' EXIT
+
+          verify_archive() {
+            local rid="$1"
+            local format="$2"
+            local extract_dir="$verification_root/$rid"
+            local -a archives=()
+            local -a executables=()
+
+            mapfile -t archives < <(
+              find artifacts/release -maxdepth 1 -type f -name "*-${rid}.${format}" -print
+            )
+            if [ "${#archives[@]}" -ne 1 ]; then
+              echo "::error::Expected one ${rid} archive, found ${#archives[@]}." >&2
+              return 1
+            fi
+
+            mkdir -p "$extract_dir"
+            if [ "$format" = "tar.gz" ]; then
+              tar -xzf "${archives[0]}" -C "$extract_dir"
+            else
+              unzip -q "${archives[0]}" -d "$extract_dir"
+            fi
+
+            mapfile -t executables < <(
+              find "$extract_dir" -type f -path "*/bin/$PACKAGE_NAME" -print
+            )
+            if [ "${#executables[@]}" -ne 1 ]; then
+              echo "::error::Expected one bin/$PACKAGE_NAME in ${archives[0]}, found ${#executables[@]}." >&2
+              return 1
+            fi
+            if [ ! -x "${executables[0]}" ]; then
+              echo "::error::${executables[0]} is not executable in ${archives[0]}." >&2
+              return 1
+            fi
+          }
+
+          verify_archive linux-x64 tar.gz
+          verify_archive linux-arm64 tar.gz
+          verify_archive osx-arm64 zip
+      - name: Generate release asset provenance
+        uses: actions/attest@v4
+        with:
+          subject-checksums: artifacts/release/checksums_sha256.txt
       - name: Upload release assets
         uses: actions/upload-artifact@v7
         with:

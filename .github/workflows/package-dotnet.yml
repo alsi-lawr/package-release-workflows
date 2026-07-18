@@ -147,6 +147,14 @@ on:
         description: Nix package attribute name to update.
         type: string
         required: true
+      nix_package_template_path:
+        description: Path to the caller's initial Nix package template.
+        type: string
+        required: true
+      nix_package_dependencies_path:
+        description: Path to the caller's Nix package dependency metadata.
+        type: string
+        required: true
       docker_build_matrix:
         description: JSON list for Docker Hub image build jobs.
         type: string
@@ -183,6 +191,10 @@ on:
         description: Smoke script to validate the published binary.
         type: string
         required: true
+      package_metadata_finalize_script:
+        description: Script that finalizes caller-specific package metadata.
+        type: string
+        required: true
     secrets:
       PACKAGE_REPOSITORY_TOKEN:
         required: false
@@ -200,7 +212,11 @@ on:
         description: Source revision captured during release prep.
         value: ${{ jobs.package.outputs.revision }}
 
-permissions: {}
+permissions:
+  contents: write
+  packages: write
+  attestations: write
+  id-token: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -210,11 +226,16 @@ jobs:
   package:
     name: Build and prepare packaging assets
     uses: ./.github/workflows/package.yml
+    permissions:
+      contents: read
+      attestations: write
+      id-token: write
     with:
       package_name: ${{ inputs.package_name }}
       dotnet_version: ${{ inputs.dotnet_version }}
       dotnet_project_path: ${{ inputs.dotnet_project_path }}
       package_smoke_script: ${{ inputs.package_smoke_script }}
+      package_metadata_finalize_script: ${{ inputs.package_metadata_finalize_script }}
       package_publish_matrix: ${{ inputs.package_publish_matrix }}
       jreleaser_image: ${{ inputs.jreleaser_image }}
       jreleaser_config: ${{ inputs.jreleaser_config }}
@@ -224,6 +245,11 @@ jobs:
     name: Publish release
     needs: package
     uses: ./.github/workflows/package-release.yml
+    permissions:
+      contents: write
+      packages: write
+      attestations: write
+      id-token: write
     with:
       version: ${{ needs.package.outputs.version }}
       revision: ${{ needs.package.outputs.revision }}
@@ -263,6 +289,8 @@ jobs:
       nix_fork_repo: ${{ inputs.nix_fork_repo }}
       nix_branch_prefix: ${{ inputs.nix_branch_prefix }}
       nix_package_name: ${{ inputs.nix_package_name }}
+      nix_package_template_path: ${{ inputs.nix_package_template_path }}
+      nix_package_dependencies_path: ${{ inputs.nix_package_dependencies_path }}
       docker_build_matrix: ${{ inputs.docker_build_matrix }}
       docker_manifest_images: ${{ inputs.docker_manifest_images }}
       ghcr_build_matrix: ${{ inputs.ghcr_build_matrix }}

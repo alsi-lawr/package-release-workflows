@@ -72,7 +72,7 @@ on:
         type: boolean
         required: true
       publish_winget:
-        description: Publish via JReleaser Winget and open PR.
+        description: Publish via JReleaser Winget for a manual upstream PR.
         type: boolean
         required: true
       publish_nixpkgs:
@@ -155,6 +155,14 @@ on:
         description: Nix package attribute name to update.
         type: string
         required: true
+      nix_package_template_path:
+        description: Caller-relative Nixpkgs package template used for first publication.
+        type: string
+        required: true
+      nix_package_dependencies_path:
+        description: Caller-relative Nix dependency file copied for first publication.
+        type: string
+        required: true
       docker_build_matrix:
         description: JSON list for Docker Hub image build jobs.
         type: string
@@ -185,8 +193,6 @@ on:
       DOCKERHUB_TOKEN:
         required: false
 
-permissions: {}
-
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
@@ -197,11 +203,54 @@ jobs:
     with:
       version: ${{ inputs.version }}
 
+  credential-preflight:
+    name: Validate all enabled publication credentials
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Fail before publication when an enabled channel lacks credentials
+        env:
+          PACKAGE_REPOSITORY_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
+          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          PUBLISH_HOMEBREW: ${{ inputs.publish_homebrew }}
+          PUBLISH_SCOOP: ${{ inputs.publish_scoop }}
+          PUBLISH_WINGET: ${{ inputs.publish_winget }}
+          PUBLISH_NIXPKGS: ${{ inputs.publish_nixpkgs }}
+          PUBLISH_CHOCOLATEY: ${{ inputs.publish_chocolatey }}
+          PUBLISH_DOCKER_HUB: ${{ inputs.publish_docker_hub }}
+        run: |
+          set -euo pipefail
+
+          require_secret() {
+            local value="$1"
+            local name="$2"
+            if test -z "$value"; then
+              echo "::error::${name} is required by an enabled publication channel." >&2
+              return 1
+            fi
+          }
+
+          if [[ "$PUBLISH_HOMEBREW" == true || "$PUBLISH_SCOOP" == true || "$PUBLISH_WINGET" == true || "$PUBLISH_NIXPKGS" == true ]]; then
+            require_secret "$PACKAGE_REPOSITORY_TOKEN" PACKAGE_REPOSITORY_TOKEN
+          fi
+
+          if [[ "$PUBLISH_CHOCOLATEY" == true ]]; then
+            require_secret "$CHOCOLATEY_API_KEY" CHOCOLATEY_API_KEY
+          fi
+
+          if [[ "$PUBLISH_DOCKER_HUB" == true ]]; then
+            require_secret "$DOCKERHUB_USERNAME" DOCKERHUB_USERNAME
+            require_secret "$DOCKERHUB_TOKEN" DOCKERHUB_TOKEN
+          fi
+
   package-tests:
     name: Test packaging lifecycle targets
-    if: ${{ inputs.run_package_tests }}
+    if: ${{ always() && inputs.run_package_tests && !failure() && !cancelled() }}
     needs:
       - validation
+      - credential-preflight
+      - github-release
     uses: ./.github/workflows/release-package-tests.yml
     with:
       version: ${{ inputs.version }}
@@ -218,44 +267,63 @@ jobs:
       run_winget_test: ${{ inputs.run_winget_test }}
 
   github-release:
-    name: Create the GitHub release
-    if: ${{ inputs.publish_github_release }}
+    name: Create or verify the immutable GitHub release
+    if: >-
+      ${{
+        always() &&
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.publish_github_release ||
+          inputs.run_package_tests ||
+          inputs.publish_homebrew ||
+          inputs.publish_scoop ||
+          inputs.publish_winget ||
+          inputs.publish_chocolatey
+        )
+      }}
     needs:
       - validation
-      - docker-hub-gate
+      - credential-preflight
     runs-on: ubuntu-26.04
     permissions:
       contents: write
     steps:
+      - name: Check out shared release workflow helpers
+        uses: actions/checkout@v7
+        with:
+          repository: alsi-lawr/package-release-workflows
+          ref: main
+          path: .shared-release-workflows
+          persist-credentials: false
       - name: Download release assets
         uses: actions/download-artifact@v8
         with:
           name: release-assets-${{ inputs.version }}
           path: artifacts/release
-      - name: Create the release
+      - name: Create the release or verify its final assets
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
           RELEASE_TITLE_PREFIX: ${{ inputs.release_title_prefix }}
-          RELEASE_NAME: ${{ inputs.release_name }}
+          PUBLISH_GITHUB_RELEASE: ${{ inputs.publish_github_release }}
         run: |
-          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release v$VERSION already exists; refusing to overwrite it." >&2
-            exit 1
-          fi
-          gh release create "v$VERSION" artifacts/release/* \
-            --repo "$GITHUB_REPOSITORY" \
-            --verify-tag \
-            --title "${RELEASE_TITLE_PREFIX} v${VERSION}" \
-            --generate-notes \
-            --latest=false
+          "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/verify-or-create-release.sh"
 
   publish-homebrew-scoop-winget:
     name: Publish Homebrew/Scoop/Winget metadata when authorised
-    if: ${{ inputs.publish_homebrew || inputs.publish_scoop || inputs.publish_winget }}
+    if: >-
+      ${{
+        always() &&
+        (inputs.publish_homebrew || inputs.publish_scoop || inputs.publish_winget) &&
+        !failure() &&
+        !cancelled()
+      }}
     needs:
       - package-tests
       - validation
+      - credential-preflight
+      - github-release
     runs-on: ubuntu-26.04
     permissions:
       contents: read
@@ -278,6 +346,19 @@ jobs:
         with:
           name: jreleaser-workspace-${{ inputs.version }}
           path: out/jreleaser
+      - name: Download release assets for package metadata
+        uses: actions/download-artifact@v8
+        with:
+          name: release-assets-${{ inputs.version }}
+          path: artifacts/release
+      - name: Check out shared release workflow helpers
+        if: ${{ inputs.publish_winget }}
+        uses: actions/checkout@v7
+        with:
+          repository: alsi-lawr/package-release-workflows
+          ref: main
+          path: .shared-release-workflows
+          persist-credentials: false
       - name: Prepare winget fork branch from upstream default branch
         id: sync-winget-branch
         if: ${{ inputs.publish_winget }}
@@ -293,7 +374,7 @@ jobs:
             echo '::error::PACKAGE_REPOSITORY_TOKEN is required for winget branch sync.' >&2
             exit 1
           fi
-          ./.github/workflows/scripts/sync-fork-branch.sh
+          "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/sync-fork-branch.sh"
       - name: Publish selected metadata packagers
         env:
           JRELEASER_CONFIG: ${{ inputs.jreleaser_config }}
@@ -324,63 +405,40 @@ jobs:
             -v "$PWD:/workspace" \
             -e JRELEASER_PROJECT_VERSION \
             -e JRELEASER_GITHUB_TOKEN \
+            -e PUBLISH_SCOOP \
+            -e PUBLISH_WINGET \
             "$JRELEASER_IMAGE" \
             publish --strict --reproducible \
             "${PUBLISH_ARGS[@]}" \
             --basedir /workspace \
             --config-file "$JRELEASER_CONFIG"
-      - name: Open Winget PR in upstream repository
+      - name: Report the manual WinGet PR handoff
         if: ${{ inputs.publish_winget }}
         env:
-          GH_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
-          VERSION: ${{ inputs.version }}
           WINGET_UPSTREAM: ${{ inputs.winget_upstream_repo }}
           WINGET_FORK_OWNER: ${{ inputs.winget_fork_owner }}
-          WINGET_FORK_REPO: ${{ inputs.winget_fork_repo }}
           WINGET_BRANCH: ${{ steps.sync-winget-branch.outputs.branch }}
           WINGET_UPSTREAM_DEFAULT_BRANCH: ${{ steps.sync-winget-branch.outputs.upstream_default_branch }}
-          WINGET_RELEASE_NAME: ${{ inputs.release_name }}
         run: |
-          if test -z "$GH_TOKEN"; then
-            echo '::error::PACKAGE_REPOSITORY_TOKEN is required for Winget PR creation.' >&2
-            exit 1
-          fi
           if test -z "$WINGET_BRANCH"; then
-            echo '::error::Winget branch was not prepared; cannot create PR.' >&2
+            echo '::error::WinGet branch was not prepared; cannot report the manual PR handoff.' >&2
             exit 1
           fi
           if test -z "$WINGET_UPSTREAM_DEFAULT_BRANCH"; then
-            echo '::error::Winget upstream default branch was not resolved; cannot create PR.' >&2
+            echo '::error::WinGet upstream default branch was not resolved; cannot report the manual PR handoff.' >&2
             exit 1
           fi
 
-          branch="$WINGET_BRANCH"
-          head="${WINGET_FORK_OWNER}:${branch}"
-
-          existing_open=$(gh pr list --repo "$WINGET_UPSTREAM" --state open --head "$head" --json number --jq 'length')
-          if [ "$existing_open" -gt 0 ]; then
-            echo "Open PR already exists for $head."
-            exit 1
-          fi
-
-          if ! git ls-remote --heads "https://github.com/${WINGET_FORK_OWNER}/${WINGET_FORK_REPO}.git" "$branch" | grep -q "$branch"; then
-            echo '::error::Expected winget branch was not found in fork.' >&2
-            exit 1
-          fi
-
-          gh pr create \
-            --repo "$WINGET_UPSTREAM" \
-            --base "$WINGET_UPSTREAM_DEFAULT_BRANCH" \
-            --head "$head" \
-            --title "chore: release ${WINGET_RELEASE_NAME} v${VERSION} manifests" \
-            --body "Automated ${WINGET_RELEASE_NAME} WinGet manifest update for v${VERSION}."
+          echo "::notice::WinGet manifests were pushed to ${WINGET_FORK_OWNER}:${WINGET_BRANCH}. Open the upstream PR to ${WINGET_UPSTREAM}:${WINGET_UPSTREAM_DEFAULT_BRANCH} manually."
 
   publish-nixpkgs:
     name: Publish Nix package and PR when authorised
-    if: ${{ inputs.publish_nixpkgs }}
+    if: ${{ always() && inputs.publish_nixpkgs && !failure() && !cancelled() }}
     needs:
       - package-tests
       - validation
+      - credential-preflight
+      - github-release
     runs-on: ubuntu-26.04
     permissions:
       contents: read
@@ -393,8 +451,19 @@ jobs:
       NIX_FORK_REPO: ${{ inputs.nix_fork_repo }}
       NIX_BRANCH_PREFIX: ${{ inputs.nix_branch_prefix }}
       NIX_PACKAGE: ${{ inputs.nix_package_name }}
+      NIX_PACKAGE_TEMPLATE_PATH: ${{ inputs.nix_package_template_path }}
+      NIX_PACKAGE_DEPENDENCIES_PATH: ${{ inputs.nix_package_dependencies_path }}
       RELEASE_NAME: ${{ inputs.release_name }}
     steps:
+      - name: Check out the caller release commit
+        uses: actions/checkout@v7
+      - name: Check out shared release workflow helpers
+        uses: actions/checkout@v7
+        with:
+          repository: alsi-lawr/package-release-workflows
+          ref: main
+          path: .shared-release-workflows
+          persist-credentials: false
       - name: Install Nix
         uses: cachix/install-nix-action@v31
         with:
@@ -407,8 +476,9 @@ jobs:
           SYNC_FORK_OWNER: ${{ inputs.nix_fork_owner }}
           SYNC_FORK_REPO: ${{ inputs.nix_fork_repo }}
           SYNC_BRANCH_PREFIX: ${{ inputs.nix_branch_prefix }}
-        run: ./.github/workflows/scripts/sync-fork-branch.sh
-      - name: Update Nixpkgs, push branch, and open PR
+        run: |
+          "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/sync-fork-branch.sh"
+      - name: Add or update Nixpkgs, build it, push the branch, and open the PR
         env:
           GH_TOKEN: ${{ env.GH_TOKEN }}
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
@@ -418,81 +488,20 @@ jobs:
           NIX_BRANCH: ${{ steps.sync-nix-branch.outputs.branch }}
           NIX_UPSTREAM_DEFAULT_BRANCH: ${{ steps.sync-nix-branch.outputs.upstream_default_branch }}
           NIX_PACKAGE: ${{ env.NIX_PACKAGE }}
+          NIX_PACKAGE_TEMPLATE_PATH: ${{ env.NIX_PACKAGE_TEMPLATE_PATH }}
+          NIX_PACKAGE_DEPENDENCIES_PATH: ${{ env.NIX_PACKAGE_DEPENDENCIES_PATH }}
           RELEASE_NAME: ${{ env.RELEASE_NAME }}
         run: |
-          if test -z "$GH_TOKEN"; then
-            echo '::error::PACKAGE_REPOSITORY_TOKEN is required for nixpkgs publication.' >&2
-            exit 1
-          fi
-          if test -z "$NIX_BRANCH"; then
-            echo '::error::Nix branch was not prepared; cannot create PR.' >&2
-            exit 1
-          fi
-          if test -z "$NIX_UPSTREAM_DEFAULT_BRANCH"; then
-            echo '::error::Nix upstream default branch was not resolved; cannot create PR.' >&2
-            exit 1
-          fi
-
-          git clone --depth 1 --filter=blob:none --single-branch --branch "$NIX_BRANCH" \
-            "https://x-access-token:${GH_TOKEN}@github.com/${NIX_FORK_OWNER}/${NIX_FORK_REPO}.git" nixpkgs
-          cd nixpkgs
-          git checkout "$NIX_BRANCH"
-
-          if git remote get-url upstream >/dev/null 2>&1; then
-            git remote set-url upstream "https://github.com/$NIX_UPSTREAM.git"
-          else
-            git remote add upstream "https://github.com/$NIX_UPSTREAM.git"
-          fi
-
-          if ! current_version="$(nix eval --impure --raw ".#legacyPackages.x86_64-linux.${NIX_PACKAGE}.version" 2>/dev/null)"; then
-            echo "::error::${NIX_PACKAGE} is not present in this nixpkgs revision." >&2
-            exit 1
-          fi
-          if [ "$current_version" = "$VERSION" ]; then
-            echo "Nix package is already at v${VERSION}; no update necessary."
-            exit 1
-          fi
-
-          nix run github:nix-community/nixpkgs-update -- \
-            update "${NIX_PACKAGE} ${current_version} ${VERSION}"
-
-          if git status --porcelain | grep -q .; then
-            git add -A
-            if ! git diff --cached --quiet; then
-              git -c user.name='github-actions[bot]' \
-                -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-                commit -m "nixpkgs: update ${NIX_PACKAGE} to v${VERSION}"
-            fi
-          fi
-
-          local_head="$(git rev-parse HEAD)"
-          remote_head="$(git rev-parse "origin/${NIX_BRANCH}")"
-          if [ "$local_head" = "$remote_head" ]; then
-            echo '::error::Nixpkgs update produced no file changes; cannot create PR.' >&2
-            exit 1
-          fi
-
-          git push origin "$NIX_BRANCH"
-
-          head="${NIX_FORK_OWNER}:${NIX_BRANCH}"
-          existing_open=$(gh pr list --repo "$NIX_UPSTREAM" --state open --head "$head" --json number --jq 'length')
-          if [ "$existing_open" -gt 0 ]; then
-            echo "Open PR already exists for $head."
-            exit 1
-          fi
-
-          gh pr create \
-            --repo "$NIX_UPSTREAM" \
-            --base "$NIX_UPSTREAM_DEFAULT_BRANCH" \
-            --head "$head" \
-            --title "nixpkgs: update ${NIX_PACKAGE} to v${VERSION}" \
-            --body "Automated ${RELEASE_NAME} nixpkgs update for v${VERSION}."
+          "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/publish-nixpkgs.sh"
 
   publish-chocolatey:
-    name: Build and optionally submit the Chocolatey package
-    if: ${{ inputs.publish_chocolatey }}
+    name: Build and submit the Chocolatey package for moderation
+    if: ${{ always() && inputs.publish_chocolatey && !failure() && !cancelled() }}
     needs:
       - package-tests
+      - validation
+      - credential-preflight
+      - github-release
     runs-on: windows-latest
     permissions:
       contents: read
@@ -518,13 +527,13 @@ jobs:
           path: artifacts/chocolatey/${{ inputs.package_name }}.${{ inputs.version }}.nupkg
           if-no-files-found: error
           retention-days: 30
-      - name: Submit only when the API key exists
+      - name: Submit the package for Chocolatey moderation
         shell: pwsh
         env:
           CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:CHOCOLATEY_API_KEY)) {
-              Write-Host '::notice::CHOCOLATEY_API_KEY is absent; upload is skipped and availability remains pending moderation.'
+              Write-Host '::error::CHOCOLATEY_API_KEY is required for Chocolatey submission.'
               exit 1
           }
           choco push "artifacts/chocolatey/${{ inputs.package_name }}.${{ inputs.version }}.nupkg" `
@@ -532,24 +541,14 @@ jobs:
             --api-key $env:CHOCOLATEY_API_KEY
           Write-Host '::notice::Chocolatey upload completed; public availability remains pending moderation.'
 
-  docker-hub-gate:
-    name: Require Docker Hub release credentials
-    if: ${{ inputs.publish_docker_hub }}
-    runs-on: ubuntu-26.04
-    steps:
-      - name: Fail unless both mandatory credentials exist
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: |
-          test -n "$DOCKERHUB_USERNAME" || { echo 'DOCKERHUB_USERNAME is required.' >&2; exit 1; }
-          test -n "$DOCKERHUB_TOKEN" || { echo 'DOCKERHUB_TOKEN is required.' >&2; exit 1; }
-
   docker-hub-images:
     name: Publish Docker Hub ${{ matrix.kind }} ${{ matrix.arch }}
-    if: ${{ inputs.publish_docker_hub }}
+    if: ${{ always() && inputs.publish_docker_hub && !failure() && !cancelled() }}
     needs:
-      - docker-hub-gate
+      - validation
+      - credential-preflight
+      - github-release
+      - package-tests
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -583,7 +582,7 @@ jobs:
 
   docker-hub-manifests:
     name: Publish Docker Hub ${{ matrix.image }} manifest
-    if: ${{ inputs.publish_docker_hub }}
+    if: ${{ always() && inputs.publish_docker_hub && needs.docker-hub-images.result == 'success' }}
     needs:
       - docker-hub-images
     runs-on: ubuntu-26.04
@@ -608,9 +607,12 @@ jobs:
 
   nix-images:
     name: Build, smoke, and publish Nix ${{ matrix.kind }} ${{ matrix.arch }}
-    if: ${{ inputs.publish_nix_images }}
+    if: ${{ always() && inputs.publish_nix_images && !failure() && !cancelled() }}
     needs:
-      - docker-hub-gate
+      - validation
+      - credential-preflight
+      - github-release
+      - package-tests
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -659,7 +661,7 @@ jobs:
 
   nix-manifests:
     name: Publish Nix GHCR ${{ matrix.image }} manifest
-    if: ${{ inputs.publish_nix_images }}
+    if: ${{ always() && inputs.publish_nix_images && needs.nix-images.result == 'success' }}
     needs:
       - nix-images
     runs-on: ubuntu-26.04
@@ -685,8 +687,18 @@ jobs:
 
   promote-latest:
     name: Promote the release version to latest
-    if: ${{ inputs.promote_latest && (inputs.publish_github_release || inputs.publish_homebrew || inputs.publish_scoop || inputs.publish_winget || inputs.publish_chocolatey || inputs.publish_nixpkgs || inputs.publish_docker_hub || inputs.publish_nix_images) }}
+    if: >-
+      ${{
+        always() &&
+        inputs.promote_latest &&
+        (inputs.publish_github_release || inputs.publish_docker_hub || inputs.publish_nix_images) &&
+        !failure() &&
+        !cancelled()
+      }}
     needs:
+      - validation
+      - credential-preflight
+      - package-tests
       - github-release
       - publish-homebrew-scoop-winget
       - publish-nixpkgs
@@ -698,23 +710,37 @@ jobs:
       contents: write
       packages: write
     steps:
-      - name: Log in to Docker Hub and GHCR
+      - name: Log in to Docker Hub
+        if: ${{ inputs.publish_docker_hub }}
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          echo "$DOCKERHUB_TOKEN" | docker login docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
-          echo "$GH_TOKEN" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
-      - name: Promote the version tags
+        run: echo "$DOCKERHUB_TOKEN" | docker login docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
+      - name: Promote Docker Hub version tags
+        if: ${{ inputs.publish_docker_hub }}
         env:
           VERSION: ${{ inputs.version }}
           IMAGES: ${{ inputs.promotion_image_matrix }}
         run: |
-          for image in $(echo "$IMAGES" | jq -r '.[]'); do
+          while IFS= read -r image; do
             docker buildx imagetools create --tag "$image:latest" "$image:$VERSION"
-          done
+          done < <(jq -r '.[] | select(startswith("docker.io/"))' <<<"$IMAGES")
+      - name: Log in to GHCR
+        if: ${{ inputs.publish_nix_images }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+      - name: Promote GHCR version tags
+        if: ${{ inputs.publish_nix_images }}
+        env:
+          VERSION: ${{ inputs.version }}
+          IMAGES: ${{ inputs.promotion_image_matrix }}
+        run: |
+          while IFS= read -r image; do
+            docker buildx imagetools create --tag "$image:latest" "$image:$VERSION"
+          done < <(jq -r '.[] | select(startswith("ghcr.io/"))' <<<"$IMAGES")
       - name: Promote the GitHub release to Latest
+        if: ${{ inputs.publish_github_release }}
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}

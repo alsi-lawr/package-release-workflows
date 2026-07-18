@@ -13,5 +13,16 @@ jobs:
   release:
     uses: OWNER/package-release-workflows/.github/workflows/package-dotnet.yml@main
     with: <workflow inputs>
-    secrets: inherit
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+      packages: write
+    secrets:
+      CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      PACKAGE_REPOSITORY_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
 ```
+
+Secrets belong to the calling repository. GitHub does not expose ordinary secrets from the repository that stores a reusable workflow to its callers.
