@@ -1,4 +1,4 @@
-name: Release package lifecycle tests
+name: Test release package lifecycles
 
 on:
   workflow_call:

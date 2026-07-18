@@ -4,6 +4,7 @@ on:
   workflow_call:
     inputs:
       version:
+        description: Release version without the v prefix.
         required: true
         type: string
 
