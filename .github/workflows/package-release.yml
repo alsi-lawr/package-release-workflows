@@ -199,7 +199,7 @@ concurrency:
 
 jobs:
   validation:
-    uses: ./.github/workflows/validation.yml
+    uses: alsi-lawr/package-release-workflows/.github/workflows/validation.yml@main
     with:
       version: ${{ inputs.version }}
 
@@ -250,8 +250,7 @@ jobs:
     needs:
       - validation
       - credential-preflight
-      - github-release
-    uses: ./.github/workflows/release-package-tests.yml
+    uses: alsi-lawr/package-release-workflows/.github/workflows/release-package-tests.yml@main
     with:
       version: ${{ inputs.version }}
       command_name: ${{ inputs.command_name }}
@@ -285,6 +284,7 @@ jobs:
     needs:
       - validation
       - credential-preflight
+      - package-tests
     runs-on: ubuntu-26.04
     permissions:
       contents: write

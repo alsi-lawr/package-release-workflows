@@ -230,16 +230,52 @@ jobs:
             --release-directory artifacts/release \
             --metadata-directory out/jreleaser/prepare
           cp -R out/jreleaser/prepare/. artifacts/package-metadata/
-      - name: Verify Unix command modes in assembled archives
+      - name: Verify five platform release archives
         env:
           PACKAGE_NAME: ${{ inputs.package_name }}
+          PACKAGE_PUBLISH_MATRIX: ${{ inputs.package_publish_matrix }}
         run: |
           verification_root="$(mktemp -d)"
           trap 'rm -rf "$verification_root"' EXIT
 
+          python3 - "artifacts/release" "$PACKAGE_PUBLISH_MATRIX" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          release_directory = Path(sys.argv[1])
+          matrix = json.loads(sys.argv[2])
+          expected_formats = {
+              "linux-x64": "tar.gz",
+              "linux-arm64": "tar.gz",
+              "osx-arm64": "zip",
+              "win-x64": "zip",
+              "win-arm64": "zip",
+          }
+          rids = [entry.get("rid") for entry in matrix]
+          if set(rids) != set(expected_formats) or len(rids) != len(expected_formats):
+              raise SystemExit(
+                  "package_publish_matrix must contain exactly the five supported release RIDs: "
+                  + ", ".join(expected_formats)
+              )
+
+          archives = sorted(
+              path for path in release_directory.iterdir()
+              if path.is_file() and (path.name.endswith(".tar.gz") or path.suffix == ".zip")
+          )
+          if len(archives) != len(expected_formats):
+              raise SystemExit(f"expected {len(expected_formats)} release archives, found {len(archives)}")
+
+          for rid, extension in expected_formats.items():
+              matches = list(release_directory.glob(f"*-{rid}.{extension}"))
+              if len(matches) != 1:
+                  raise SystemExit(f"expected one {rid}.{extension} archive, found {len(matches)}")
+          PY
+
           verify_archive() {
             local rid="$1"
             local format="$2"
+            local executable_name="$3"
             local extract_dir="$verification_root/$rid"
             local -a archives=()
             local -a executables=()
@@ -260,21 +296,23 @@ jobs:
             fi
 
             mapfile -t executables < <(
-              find "$extract_dir" -type f -path "*/bin/$PACKAGE_NAME" -print
+              find "$extract_dir" -type f -path "*/bin/$executable_name" -print
             )
             if [ "${#executables[@]}" -ne 1 ]; then
-              echo "::error::Expected one bin/$PACKAGE_NAME in ${archives[0]}, found ${#executables[@]}." >&2
+              echo "::error::Expected one bin/$executable_name in ${archives[0]}, found ${#executables[@]}." >&2
               return 1
             fi
-            if [ ! -x "${executables[0]}" ]; then
+            if [ "$format" != zip ] && [ ! -x "${executables[0]}" ]; then
               echo "::error::${executables[0]} is not executable in ${archives[0]}." >&2
               return 1
             fi
           }
 
-          verify_archive linux-x64 tar.gz
-          verify_archive linux-arm64 tar.gz
-          verify_archive osx-arm64 zip
+          verify_archive linux-x64 tar.gz "$PACKAGE_NAME"
+          verify_archive linux-arm64 tar.gz "$PACKAGE_NAME"
+          verify_archive osx-arm64 zip "$PACKAGE_NAME"
+          verify_archive win-x64 zip "$PACKAGE_NAME.exe"
+          verify_archive win-arm64 zip "$PACKAGE_NAME.exe"
       - name: Generate release asset provenance
         uses: actions/attest@v4
         with:

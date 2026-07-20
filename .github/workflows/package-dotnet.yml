@@ -225,7 +225,7 @@ concurrency:
 jobs:
   package:
     name: Build and prepare packaging assets
-    uses: ./.github/workflows/package.yml
+    uses: alsi-lawr/package-release-workflows/.github/workflows/package.yml@main
     permissions:
       contents: read
       attestations: write
@@ -244,7 +244,7 @@ jobs:
   package-release:
     name: Publish release
     needs: package
-    uses: ./.github/workflows/package-release.yml
+    uses: alsi-lawr/package-release-workflows/.github/workflows/package-release.yml@main
     permissions:
       contents: write
       packages: write
