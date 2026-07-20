@@ -250,6 +250,7 @@ jobs:
     needs:
       - validation
       - credential-preflight
+      - github-release
     uses: alsi-lawr/package-release-workflows/.github/workflows/release-package-tests.yml@main
     with:
       version: ${{ inputs.version }}
@@ -284,7 +285,6 @@ jobs:
     needs:
       - validation
       - credential-preflight
-      - package-tests
     runs-on: ubuntu-26.04
     permissions:
       contents: write
