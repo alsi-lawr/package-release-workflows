@@ -193,10 +193,6 @@ on:
       DOCKERHUB_TOKEN:
         required: false
 
-concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   validation:
     uses: alsi-lawr/package-release-workflows/.github/workflows/validation.yml@main
