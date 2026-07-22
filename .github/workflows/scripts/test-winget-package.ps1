@@ -37,15 +37,20 @@ winget validate --manifest $manifestDirectory
 if ($LASTEXITCODE -ne 0) { throw 'WinGet manifest validation failed.' }
 winget settings --enable LocalManifestFiles
 if ($LASTEXITCODE -ne 0) { throw 'WinGet could not enable local manifest files.' }
-winget install --manifest $manifestDirectory --accept-package-agreements --accept-source-agreements --disable-interactivity
+winget install --manifest $manifestDirectory --scope machine --accept-package-agreements --accept-source-agreements --disable-interactivity
 if ($LASTEXITCODE -ne 0) { throw 'WinGet install failed.' }
 $userPath = [Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::User)
-$env:PATH = "$userPath;$env:PATH"
+$machinePath = [Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::Machine)
+$packagePaths = @($machinePath, $userPath) -split ';' | Where-Object {
+  $_ -like '*\WinGet\Packages\*' -and (Test-Path (Join-Path $_ "$commandName.exe"))
+}
+if ($packagePaths.Count -ne 1) { throw 'WinGet did not add exactly one installed package directory to PATH.' }
+$installedExecutable = Join-Path $packagePaths[0] "$commandName.exe"
 & "$PSScriptRoot/test-installed-command.ps1" `
-  -Executable (Get-Command $commandName).Source `
+  -Executable $installedExecutable `
   -CommandName $commandName `
   -Version $version
-winget uninstall --manifest $manifestDirectory --accept-source-agreements --disable-interactivity
+winget uninstall --manifest $manifestDirectory --scope machine --accept-source-agreements --disable-interactivity
 if ($LASTEXITCODE -ne 0) { throw 'WinGet uninstall failed.' }
-if (Get-Command $commandName -ErrorAction SilentlyContinue) { throw 'WinGet left the command installed.' }
+if (Test-Path $installedExecutable) { throw 'WinGet left the command installed.' }
 if ((Get-Content (Join-Path $stateDirectory 'marker')) -ne 'preserve') { throw 'WinGet uninstall changed user data.' }
