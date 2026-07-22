@@ -404,7 +404,7 @@ jobs:
             -e JRELEASER_PROJECT_VERSION \
             -e JRELEASER_GITHUB_TOKEN \
             -e PUBLISH_SCOOP \
-            -e PUBLISH_WINGET \
+            -e PUBLISH_WINGET=false \
             "$JRELEASER_IMAGE" \
             publish --strict --reproducible \
             "${PUBLISH_ARGS[@]}" \
