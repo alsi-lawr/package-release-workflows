@@ -347,6 +347,12 @@ jobs:
         with:
           name: release-assets-${{ inputs.version }}
           path: artifacts/release
+      - name: Download prepared package metadata
+        if: ${{ inputs.publish_winget }}
+        uses: actions/download-artifact@v8
+        with:
+          name: package-metadata-${{ inputs.version }}
+          path: artifacts/package-metadata
       - name: Check out shared release workflow helpers
         if: ${{ inputs.publish_winget }}
         uses: actions/checkout@v7
@@ -388,12 +394,8 @@ jobs:
           if [ "$PUBLISH_SCOOP" = "true" ]; then
             PUBLISH_ARGS+=(--packager scoop)
           fi
-          if [ "$PUBLISH_WINGET" = "true" ]; then
-            PUBLISH_ARGS+=(--packager winget)
-          fi
-
           if [ "${#PUBLISH_ARGS[@]}" -eq 0 ]; then
-            echo 'No Homebrew/Scoop/Winget targets enabled; skipping publication step.'
+            echo 'No JReleaser metadata targets enabled; skipping publication step.'
             exit 0
           fi
 
@@ -408,6 +410,16 @@ jobs:
             "${PUBLISH_ARGS[@]}" \
             --basedir /workspace \
             --config-file "$JRELEASER_CONFIG"
+      - name: Publish WinGet manifests to the prepared fork branch
+        if: ${{ inputs.publish_winget }}
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
+          WINGET_FORK_OWNER: ${{ inputs.winget_fork_owner }}
+          WINGET_FORK_REPO: ${{ inputs.winget_fork_repo }}
+          WINGET_BRANCH: ${{ steps.sync-winget-branch.outputs.branch }}
+          WINGET_MANIFEST_DIRECTORY: ${{ inputs.winget_manifest_prefix }}/${{ inputs.version }}
+        run: |
+          "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/publish-winget-fork.sh"
       - name: Report the manual WinGet PR handoff
         if: ${{ inputs.publish_winget }}
         env:
