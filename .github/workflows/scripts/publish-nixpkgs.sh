@@ -106,6 +106,7 @@ if remaining:
 Path(output_path).write_text(rendered)
 PY
   cp -- "$dependencies_path" "$package_directory/$dependencies_name"
+  git add -- "$package_directory"
 fi
 
 resulting_version="$(nix eval --impure --raw ".#legacyPackages.x86_64-linux.${NIX_PACKAGE}.version")"
