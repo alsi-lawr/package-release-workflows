@@ -45,7 +45,7 @@ $env:PATH = "$userPath;$env:PATH"
   -Executable (Get-Command $commandName).Source `
   -CommandName $commandName `
   -Version $version
-winget uninstall --id $env:WINGET_IDENTIFIER --exact --disable-interactivity
+winget uninstall --id $env:WINGET_IDENTIFIER --exact --accept-source-agreements --disable-interactivity
 if ($LASTEXITCODE -ne 0) { throw 'WinGet uninstall failed.' }
 if (Get-Command $commandName -ErrorAction SilentlyContinue) { throw 'WinGet left the command installed.' }
 if ((Get-Content (Join-Path $stateDirectory 'marker')) -ne 'preserve') { throw 'WinGet uninstall changed user data.' }
