@@ -105,6 +105,10 @@ if remaining:
     raise SystemExit(f"template still contains placeholders after rendering: {', '.join(remaining)}")
 Path(output_path).write_text(rendered)
 PY
+  # Backfill the immutable v0.1.2 template; remove after its release run succeeds.
+  if [ "${GITHUB_REPOSITORY:-}" = alsi-lawr/BlokeBot ] && [ "$VERSION" = 0.1.2 ]; then
+    sed -i '/^  inherit version src;$/a\\n  postPatch = "rm dotnet-tools.json";' "$package_directory/package.nix"
+  fi
   cp -- "$dependencies_path" "$package_directory/$dependencies_name"
   git add -- "$package_directory"
 fi
