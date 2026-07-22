@@ -65,6 +65,13 @@ jobs:
     steps:
       - name: Check out smoke tooling
         uses: actions/checkout@v7
+      - name: Check out shared release workflow helpers
+        uses: actions/checkout@v7
+        with:
+          repository: alsi-lawr/package-release-workflows
+          ref: main
+          path: .shared-release-workflows
+          persist-credentials: false
       - name: Download JReleaser package metadata
         uses: actions/download-artifact@v8
         with:
@@ -73,30 +80,12 @@ jobs:
       - name: Install, smoke, reinstall, and uninstall the formula
         env:
           VERSION: ${{ inputs.version }}
-          FORMULA: ${{ inputs.brew_formula_path }}
+          FORMULA_PATH: ${{ inputs.brew_formula_path }}
           SMOKE_SCRIPT: ${{ inputs.smoke_script }}
           COMMAND_NAME: ${{ inputs.command_name }}
           STATE_DIR_NAME: ${{ inputs.state_directory_name }}
         run: |
-          state_directory="$HOME/Library/Application Support/$STATE_DIR_NAME"
-          mkdir -p "$state_directory"
-          printf 'preserve\n' > "$state_directory/marker"
-          formula="$GITHUB_WORKSPACE/$FORMULA"
-          tap=release-tests/package-lifecycle
-          formula_name="$(basename "$formula" .rb)"
-          brew tap-new "$tap"
-          tap_directory="$(brew --repository "$tap")"
-          cp "$formula" "$tap_directory/Formula/$formula_name.rb"
-          brew install --formula "$tap/$formula_name"
-          python3 "$SMOKE_SCRIPT" "$(command -v "$COMMAND_NAME")" --version "$VERSION"
-          brew reinstall --formula "$tap/$formula_name"
-          test "$(cat "$state_directory/marker")" = preserve
-          brew uninstall "$tap/$formula_name"
-          if command -v "$COMMAND_NAME"; then
-            exit 1
-          fi
-          test "$(cat "$state_directory/marker")" = preserve
-          brew untap "$tap"
+          "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/test-homebrew-package.sh"
 
   package-windows-tests:
     if: ${{ inputs.run_windows_packaging_tests }}
@@ -107,71 +96,29 @@ jobs:
     steps:
       - name: Check out smoke tooling
         uses: actions/checkout@v7
+      - name: Check out shared release workflow helpers
+        uses: actions/checkout@v7
+        with:
+          repository: alsi-lawr/package-release-workflows
+          ref: main
+          path: .shared-release-workflows
+          persist-credentials: false
       - name: Download JReleaser package metadata
         uses: actions/download-artifact@v8
         with:
           name: package-metadata-${{ inputs.version }}
           path: artifacts/package-metadata
-      - name: Install Scoop
+      - name: Test Scoop and Chocolatey package lifecycles
         shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+          COMMAND_NAME: ${{ inputs.command_name }}
+          STATE_DIR_NAME: ${{ inputs.state_directory_name }}
+          SMOKE_SCRIPT: ${{ inputs.smoke_script }}
+          SCOOP_MANIFEST: ${{ inputs.scoop_manifest_path }}
+          CHOCOLATEY_NUSPEC: ${{ inputs.chocolatey_nuspec_path }}
         run: |
-          Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
-          Invoke-RestMethod https://get.scoop.sh | Invoke-Expression
-          $shims = Join-Path $env:USERPROFILE 'scoop\shims'
-          $env:PATH = "$shims;$env:PATH"
-          $shims | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-      - name: Test the mandatory Scoop lifecycle
-        shell: pwsh
-        run: |
-          $version = '${{ inputs.version }}'
-          $stateDirectory = Join-Path $env:LOCALAPPDATA '${{ inputs.state_directory_name }}'
-          New-Item -ItemType Directory -Force $stateDirectory | Out-Null
-          Set-Content (Join-Path $stateDirectory 'marker') 'preserve'
-          $manifest = Join-Path $env:GITHUB_WORKSPACE '${{ inputs.scoop_manifest_path }}'
-          scoop install $manifest
-          if ($LASTEXITCODE -ne 0) { throw 'Scoop install failed.' }
-          python ${{ inputs.smoke_script }} (Get-Command '${{ inputs.command_name }}').Source --version $version
-          if ($LASTEXITCODE -ne 0) { throw 'Scoop smoke test failed.' }
-          scoop update '${{ inputs.command_name }}'
-          if ($LASTEXITCODE -ne 0) { throw 'Scoop update failed.' }
-          if ((Get-Content (Join-Path $stateDirectory 'marker')) -ne 'preserve') { throw 'Scoop update changed user data.' }
-          scoop uninstall '${{ inputs.command_name }}'
-          if ($LASTEXITCODE -ne 0) { throw 'Scoop uninstall failed.' }
-          if (Get-Command '${{ inputs.command_name }}' -ErrorAction SilentlyContinue) { throw 'Scoop left the command installed.' }
-          if ((Get-Content (Join-Path $stateDirectory 'marker')) -ne 'preserve') { throw 'Scoop uninstall changed user data.' }
-      - name: Test Chocolatey package lifecycle
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $version = '${{ inputs.version }}'
-          $stateDirectory = Join-Path $env:LOCALAPPDATA '${{ inputs.state_directory_name }}'
-          New-Item -ItemType Directory -Force $stateDirectory | Out-Null
-          Set-Content (Join-Path $stateDirectory 'marker') 'preserve'
-          New-Item -ItemType Directory -Force artifacts/chocolatey | Out-Null
-          choco pack '${{ inputs.chocolatey_nuspec_path }}' --output-directory artifacts/chocolatey
-          if ($LASTEXITCODE -ne 0) { throw 'Chocolatey pack failed.' }
-          choco install '${{ inputs.command_name }}' --source artifacts/chocolatey --version $version --yes --no-progress
-          if ($LASTEXITCODE -ne 0) { throw 'Chocolatey install failed.' }
-          refreshenv
-          if (-not $?) { throw 'Chocolatey environment refresh failed after install.' }
-          $shim = (Get-Command '${{ inputs.command_name }}').Source
-          & $shim version
-          if ($LASTEXITCODE -ne 0) { throw 'Chocolatey shim version check failed.' }
-          $packageRoot = Join-Path $env:ChocolateyInstall 'lib\${{ inputs.command_name }}'
-          $installedExecutable = Get-ChildItem $packageRoot -Filter '${{ inputs.command_name }}.exe' -Recurse |
-            Select-Object -First 1 -ExpandProperty FullName
-          if (-not $installedExecutable) { throw 'Chocolatey installed executable was not found.' }
-          python '${{ inputs.smoke_script }}' $installedExecutable --version $version
-          if ($LASTEXITCODE -ne 0) { throw 'Chocolatey smoke test failed.' }
-          choco upgrade '${{ inputs.command_name }}' --source artifacts/chocolatey --version $version --force --yes --no-progress
-          if ($LASTEXITCODE -ne 0) { throw 'Chocolatey upgrade failed.' }
-          if ((Get-Content (Join-Path $stateDirectory 'marker')) -ne 'preserve') { throw 'Chocolatey update changed user data.' }
-          choco uninstall '${{ inputs.command_name }}' --yes --no-progress
-          if ($LASTEXITCODE -ne 0) { throw 'Chocolatey uninstall failed.' }
-          refreshenv
-          if (-not $?) { throw 'Chocolatey environment refresh failed after uninstall.' }
-          if (Get-Command '${{ inputs.command_name }}' -ErrorAction SilentlyContinue) { throw 'Chocolatey left the command installed.' }
-          if ((Get-Content (Join-Path $stateDirectory 'marker')) -ne 'preserve') { throw 'Chocolatey uninstall changed user data.' }
+          & "$env:GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/test-windows-packages.ps1"
 
   package-winget-test:
     if: ${{ inputs.run_winget_test }}
@@ -182,45 +129,26 @@ jobs:
     steps:
       - name: Check out smoke tooling
         uses: actions/checkout@v7
+      - name: Check out shared release workflow helpers
+        uses: actions/checkout@v7
+        with:
+          repository: alsi-lawr/package-release-workflows
+          ref: main
+          path: .shared-release-workflows
+          persist-credentials: false
       - name: Download JReleaser package metadata
         uses: actions/download-artifact@v8
         with:
           name: package-metadata-${{ inputs.version }}
           path: artifacts/package-metadata
-      - name: Provision and require the runner WinGet client
+      - name: Provision WinGet and test its package lifecycle
         shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+          COMMAND_NAME: ${{ inputs.command_name }}
+          STATE_DIR_NAME: ${{ inputs.state_directory_name }}
+          SMOKE_SCRIPT: ${{ inputs.smoke_script }}
+          WINGET_MANIFEST_PREFIX: ${{ inputs.winget_manifest_prefix }}
+          WINGET_IDENTIFIER: ${{ inputs.winget_identifier }}
         run: |
-          $client = Get-Command winget -ErrorAction SilentlyContinue
-          if ($null -eq $client) {
-            Install-Module -Name Microsoft.WinGet.Client -Force -Repository PSGallery
-            Repair-WinGetPackageManager -AllUsers -Force -Latest
-            $windowsApps = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps'
-            $env:PATH = "$windowsApps;$env:PATH"
-            $windowsApps | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-            $client = Get-Command winget -ErrorAction SilentlyContinue
-          }
-          if ($null -eq $client) { throw 'WinGet is not available on this runner.' }
-          & $client.Source --version
-          if ($LASTEXITCODE -ne 0) { throw 'WinGet is unusable on this runner.' }
-      - name: Validate and test the mandatory WinGet lifecycle
-        shell: pwsh
-        run: |
-          $version = '${{ inputs.version }}'
-          $stateDirectory = Join-Path $env:LOCALAPPDATA '${{ inputs.state_directory_name }}'
-          New-Item -ItemType Directory -Force $stateDirectory | Out-Null
-          Set-Content (Join-Path $stateDirectory 'marker') 'preserve'
-          $manifestDirectory = Join-Path $env:GITHUB_WORKSPACE ('${{ inputs.winget_manifest_prefix }}/' + $version)
-          winget validate --manifest $manifestDirectory
-          if ($LASTEXITCODE -ne 0) { throw 'WinGet manifest validation failed.' }
-          winget settings --enable LocalManifestFiles
-          if ($LASTEXITCODE -ne 0) { throw 'WinGet could not enable local manifest files.' }
-          winget install --manifest $manifestDirectory --accept-package-agreements --accept-source-agreements --disable-interactivity
-          if ($LASTEXITCODE -ne 0) { throw 'WinGet install failed.' }
-          $links = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links'
-          $env:PATH = "$links;$env:PATH"
-          python '${{ inputs.smoke_script }}' (Get-Command '${{ inputs.command_name }}').Source --version $version
-          if ($LASTEXITCODE -ne 0) { throw 'WinGet smoke test failed.' }
-          winget uninstall --id '${{ inputs.winget_identifier }}' --exact --disable-interactivity
-          if ($LASTEXITCODE -ne 0) { throw 'WinGet uninstall failed.' }
-          if (Get-Command '${{ inputs.command_name }}' -ErrorAction SilentlyContinue) { throw 'WinGet left the command installed.' }
-          if ((Get-Content (Join-Path $stateDirectory 'marker')) -ne 'preserve') { throw 'WinGet uninstall changed user data.' }
+          & "$env:GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/test-winget-package.ps1"
