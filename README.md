@@ -19,6 +19,15 @@ multi-architecture images. `package.yml` requires the release matrix to contain
 exactly `linux-x64`, `linux-arm64`, `osx-arm64`, `win-x64`, and `win-arm64`;
 Linux archives are `.tar.gz` and macOS/Windows archives are `.zip`.
 
+Tagged releases prepare and push the exact versioned WinGet and nixpkgs fork
+branches, but never open upstream pull requests. Callers use the separate
+submit-upstream-prs.yml reusable workflow from a thin workflow_dispatch caller
+to submit either prepared branch after it verifies a matching non-draft GitHub
+release and that the expected fork branch is ahead of the upstream default
+branch. The manual workflow reports an existing open PR for the same fork branch
+instead of creating a duplicate; it neither rebuilds or republishes artifacts nor
+rewrites fork branches.
+
 Usage:
 
 ```yaml

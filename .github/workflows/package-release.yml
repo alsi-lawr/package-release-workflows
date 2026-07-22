@@ -76,7 +76,7 @@ on:
         type: boolean
         required: true
       publish_nixpkgs:
-        description: Push nixpkgs update and open PR.
+        description: Push nixpkgs update for a manual upstream PR.
         type: boolean
         required: true
       publish_chocolatey:
@@ -432,7 +432,7 @@ jobs:
           echo "::notice::WinGet manifests were pushed to ${WINGET_FORK_OWNER}:${WINGET_BRANCH}. Open the upstream PR to ${WINGET_UPSTREAM}:${WINGET_UPSTREAM_DEFAULT_BRANCH} manually."
 
   publish-nixpkgs:
-    name: Publish Nix package and PR when authorised
+    name: Publish Nix package and prepare manual PR handoff
     if: ${{ always() && inputs.publish_nixpkgs && !failure() && !cancelled() }}
     needs:
       - package-tests
@@ -453,7 +453,6 @@ jobs:
       NIX_PACKAGE: ${{ inputs.nix_package_name }}
       NIX_PACKAGE_TEMPLATE_PATH: ${{ inputs.nix_package_template_path }}
       NIX_PACKAGE_DEPENDENCIES_PATH: ${{ inputs.nix_package_dependencies_path }}
-      RELEASE_NAME: ${{ inputs.release_name }}
     steps:
       - name: Check out the caller release commit
         uses: actions/checkout@v7
@@ -478,7 +477,7 @@ jobs:
           SYNC_BRANCH_PREFIX: ${{ inputs.nix_branch_prefix }}
         run: |
           "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/sync-fork-branch.sh"
-      - name: Add or update Nixpkgs, build it, push the branch, and open the PR
+      - name: Add or update Nixpkgs, build it, and push the branch
         env:
           GH_TOKEN: ${{ env.GH_TOKEN }}
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
@@ -490,7 +489,6 @@ jobs:
           NIX_PACKAGE: ${{ env.NIX_PACKAGE }}
           NIX_PACKAGE_TEMPLATE_PATH: ${{ env.NIX_PACKAGE_TEMPLATE_PATH }}
           NIX_PACKAGE_DEPENDENCIES_PATH: ${{ env.NIX_PACKAGE_DEPENDENCIES_PATH }}
-          RELEASE_NAME: ${{ env.RELEASE_NAME }}
         run: |
           "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/publish-nixpkgs.sh"
 

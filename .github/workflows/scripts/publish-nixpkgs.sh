@@ -6,11 +6,7 @@ if test -z "$GH_TOKEN"; then
   exit 1
 fi
 if test -z "$NIX_BRANCH"; then
-  echo '::error::Nix branch was not prepared; cannot create PR.' >&2
-  exit 1
-fi
-if test -z "$NIX_UPSTREAM_DEFAULT_BRANCH"; then
-  echo '::error::Nix upstream default branch was not resolved; cannot create PR.' >&2
+  echo '::error::Nix branch was not prepared; cannot push metadata.' >&2
   exit 1
 fi
 
@@ -138,16 +134,4 @@ fi
 
 git push origin "$NIX_BRANCH"
 
-head="${NIX_FORK_OWNER}:${NIX_BRANCH}"
-existing_open="$(gh pr list --repo "$NIX_UPSTREAM" --state open --head "$head" --json url --jq '.[0].url // empty')"
-if [ -n "$existing_open" ]; then
-  echo "Existing Nixpkgs PR updated: $existing_open"
-  exit 0
-fi
-
-gh pr create \
-  --repo "$NIX_UPSTREAM" \
-  --base "$NIX_UPSTREAM_DEFAULT_BRANCH" \
-  --head "$head" \
-  --title "nixpkgs: ${change_kind} ${NIX_PACKAGE} to v${VERSION}" \
-  --body "Automated ${RELEASE_NAME} nixpkgs ${change_kind} for v${VERSION}."
+echo "Nixpkgs metadata is ready for manual upstream PR submission from ${NIX_FORK_OWNER}:${NIX_BRANCH}."

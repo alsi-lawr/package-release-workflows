@@ -64,11 +64,11 @@ on:
         type: boolean
         required: true
       publish_winget:
-        description: Publish via JReleaser Winget and open PR.
+        description: Publish via JReleaser Winget for a manual upstream PR.
         type: boolean
         required: true
       publish_nixpkgs:
-        description: Push nixpkgs update and open PR.
+        description: Push nixpkgs update for a manual upstream PR.
         type: boolean
         required: true
       publish_chocolatey:

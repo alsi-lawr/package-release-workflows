@@ -1,0 +1,83 @@
+name: Reusable Upstream Package PR Submission
+on:
+  workflow_call:
+    inputs:
+      version: { description: Release version without v prefix in strict X.Y.Z form., type: string, required: true }
+      release_name: { description: Product title used in PR titles., type: string, required: true }
+      submit_winget: { description: Submit the prepared WinGet fork branch., type: boolean, required: true }
+      submit_nixpkgs: { description: Submit the prepared nixpkgs fork branch., type: boolean, required: true }
+      winget_upstream_repo: { description: WinGet upstream repository., type: string, required: true }
+      winget_fork_owner: { description: WinGet fork owner., type: string, required: true }
+      winget_fork_repo: { description: WinGet fork repository., type: string, required: true }
+      winget_branch_prefix: { description: Prepared WinGet branch prefix., type: string, required: true }
+      nix_upstream_repo: { description: nixpkgs upstream repository., type: string, required: true }
+      nix_fork_owner: { description: nixpkgs fork owner., type: string, required: true }
+      nix_fork_repo: { description: nixpkgs fork repository., type: string, required: true }
+      nix_branch_prefix: { description: Prepared nixpkgs branch prefix., type: string, required: true }
+      nix_package_name: { description: nixpkgs package attribute in the prepared branch., type: string, required: true }
+    secrets:
+      PACKAGE_REPOSITORY_TOKEN: { required: true }
+permissions: { contents: read }
+concurrency:
+  group: upstream-package-pr-${{ github.repository }}-${{ inputs.version }}
+  cancel-in-progress: false
+jobs:
+  validate-request:
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Require a strict version and at least one selected channel
+        env:
+          VERSION: ${{ inputs.version }}
+          SUBMIT_WINGET: ${{ inputs.submit_winget }}
+          SUBMIT_NIXPKGS: ${{ inputs.submit_nixpkgs }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Version must be a strict X.Y.Z release version without a v prefix; received '$VERSION'." >&2
+            exit 1
+          fi
+          if [[ "$SUBMIT_WINGET" != true && "$SUBMIT_NIXPKGS" != true ]]; then
+            echo '::error::Select at least one upstream package channel to submit.' >&2
+            exit 1
+          fi
+  submit-winget:
+    if: ${{ inputs.submit_winget }}
+    needs: validate-request
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+        with: { repository: alsi-lawr/package-release-workflows, ref: main, path: .shared-release-workflows, persist-credentials: false }
+      - name: Verify release and fork branch, then submit WinGet PR
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          UPSTREAM_REPOSITORY: ${{ inputs.winget_upstream_repo }}
+          FORK_OWNER: ${{ inputs.winget_fork_owner }}
+          FORK_REPOSITORY: ${{ inputs.winget_fork_repo }}
+          FORK_BRANCH: ${{ inputs.winget_branch_prefix }}${{ inputs.version }}
+          PR_TITLE: "New version: ${{ inputs.release_name }} version ${{ inputs.version }}"
+          PR_BODY: "Automated ${{ inputs.release_name }} WinGet metadata for v${{ inputs.version }}."
+          CHANNEL: WinGet
+        run: |
+          "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/submit-upstream-pr.sh"
+  submit-nixpkgs:
+    if: ${{ inputs.submit_nixpkgs }}
+    needs: validate-request
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+        with: { repository: alsi-lawr/package-release-workflows, ref: main, path: .shared-release-workflows, persist-credentials: false }
+      - name: Verify release and fork branch, then submit nixpkgs PR
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          UPSTREAM_REPOSITORY: ${{ inputs.nix_upstream_repo }}
+          FORK_OWNER: ${{ inputs.nix_fork_owner }}
+          FORK_REPOSITORY: ${{ inputs.nix_fork_repo }}
+          FORK_BRANCH: ${{ inputs.nix_branch_prefix }}${{ inputs.version }}
+          NIX_PACKAGE: ${{ inputs.nix_package_name }}
+          CHANNEL: nixpkgs
+        run: |
+          "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/submit-upstream-pr.sh"
