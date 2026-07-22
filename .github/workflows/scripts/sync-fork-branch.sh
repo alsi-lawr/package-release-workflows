@@ -45,7 +45,7 @@ if gh api "$fork_api/git/ref/heads/$branch" >/dev/null 2>&1; then
   else
     gh api --method PATCH "$fork_api/git/refs/heads/$branch" \
       -f sha="$upstream_head_sha" \
-      -f force=true >/dev/null
+      -F force=true >/dev/null
     echo "Reusable branch '$branch' was reset to '$SYNC_UPSTREAM_REPO@$upstream_default_branch'."
   fi
 else
