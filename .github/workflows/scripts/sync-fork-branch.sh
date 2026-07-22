@@ -8,19 +8,6 @@ set -euo pipefail
 : "${SYNC_FORK_REPO:?Missing SYNC_FORK_REPO}"
 : "${SYNC_BRANCH_PREFIX:?Missing SYNC_BRANCH_PREFIX}"
 
-# Backfill the immutable v0.1.2 release checkout; remove after its release run succeeds.
-if [ "${GITHUB_REPOSITORY:-}" = alsi-lawr/BlokeBot ] && [ "$SYNC_VERSION" = 0.1.2 ]; then
-  finalize_script="$GITHUB_WORKSPACE/packaging/jreleaser/finalize_metadata.sh"
-  if test -f "$finalize_script"; then
-    # Replace the literal variable reference in the release script.
-    # shellcheck disable=SC2016
-    sed -i 's/grep -Fxq "$expected_entry"/grep -Fx "$expected_entry" >\/dev\/null/' "$finalize_script"
-    if ! grep -Fxq '    ArchiveBinariesDependOnPath: true' "$finalize_script"; then
-      sed -i '/^    NestedInstallerType: portable$/a\    ArchiveBinariesDependOnPath: true' "$finalize_script"
-    fi
-  fi
-fi
-
 branch="${SYNC_BRANCH_PREFIX}${SYNC_VERSION}"
 upstream_api="repos/$SYNC_UPSTREAM_REPO"
 fork_api="repos/$SYNC_FORK_OWNER/$SYNC_FORK_REPO"
