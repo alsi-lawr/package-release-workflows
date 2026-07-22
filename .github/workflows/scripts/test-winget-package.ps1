@@ -41,9 +41,9 @@ winget install --manifest $manifestDirectory --scope machine --accept-package-ag
 if ($LASTEXITCODE -ne 0) { throw 'WinGet install failed.' }
 $userPath = [Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::User)
 $machinePath = [Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::Machine)
-$packagePaths = @($machinePath, $userPath) -split ';' | Where-Object {
+$packagePaths = @(@($machinePath, $userPath) -split ';' | Where-Object {
   $_ -like '*\WinGet\Packages\*' -and (Test-Path (Join-Path $_ "$commandName.exe"))
-}
+})
 if ($packagePaths.Count -ne 1) { throw 'WinGet did not add exactly one installed package directory to PATH.' }
 $installedExecutable = Join-Path $packagePaths[0] "$commandName.exe"
 & "$PSScriptRoot/test-installed-command.ps1" `
