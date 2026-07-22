@@ -209,7 +209,7 @@ jobs:
           $stateDirectory = Join-Path $env:LOCALAPPDATA '${{ inputs.state_directory_name }}'
           New-Item -ItemType Directory -Force $stateDirectory | Out-Null
           Set-Content (Join-Path $stateDirectory 'marker') 'preserve'
-          $manifestDirectory = Join-Path $env:GITHUB_WORKSPACE '${{ inputs.winget_manifest_prefix }}/' + $version
+          $manifestDirectory = Join-Path $env:GITHUB_WORKSPACE ('${{ inputs.winget_manifest_prefix }}/' + $version)
           winget validate --manifest $manifestDirectory
           if ($LASTEXITCODE -ne 0) { throw 'WinGet manifest validation failed.' }
           winget settings --enable LocalManifestFiles
