@@ -3,9 +3,7 @@ $ErrorActionPreference = 'Stop'
 $version = $env:VERSION
 $commandName = $env:COMMAND_NAME
 $stateDirectory = Join-Path $env:LOCALAPPDATA $env:STATE_DIR_NAME
-$smokeScript = Join-Path $env:GITHUB_WORKSPACE $env:SMOKE_SCRIPT
 $manifestDirectory = Join-Path $env:GITHUB_WORKSPACE ($env:WINGET_MANIFEST_PREFIX + '/' + $version)
-$python = (Get-Command python -ErrorAction Stop).Source
 
 $client = Get-Command winget -ErrorAction SilentlyContinue
 if ($null -eq $client) {
@@ -29,8 +27,10 @@ winget install --manifest $manifestDirectory --accept-package-agreements --accep
 if ($LASTEXITCODE -ne 0) { throw 'WinGet install failed.' }
 $links = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links'
 $env:PATH = "$links;$env:PATH"
-& $python $smokeScript (Get-Command $commandName).Source --version $version
-if ($LASTEXITCODE -ne 0) { throw 'WinGet smoke test failed.' }
+& "$PSScriptRoot/test-installed-command.ps1" `
+  -Executable (Get-Command $commandName).Source `
+  -CommandName $commandName `
+  -Version $version
 winget uninstall --id $env:WINGET_IDENTIFIER --exact --disable-interactivity
 if ($LASTEXITCODE -ne 0) { throw 'WinGet uninstall failed.' }
 if (Get-Command $commandName -ErrorAction SilentlyContinue) { throw 'WinGet left the command installed.' }

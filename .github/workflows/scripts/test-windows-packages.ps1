@@ -3,10 +3,8 @@ $ErrorActionPreference = 'Stop'
 $version = $env:VERSION
 $commandName = $env:COMMAND_NAME
 $stateDirectory = Join-Path $env:LOCALAPPDATA $env:STATE_DIR_NAME
-$smokeScript = Join-Path $env:GITHUB_WORKSPACE $env:SMOKE_SCRIPT
 $scoopManifest = Join-Path $env:GITHUB_WORKSPACE $env:SCOOP_MANIFEST
 $chocolateyNuspec = Join-Path $env:GITHUB_WORKSPACE $env:CHOCOLATEY_NUSPEC
-$python = (Get-Command python -ErrorAction Stop).Source
 
 Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
 Invoke-RestMethod https://get.scoop.sh | Invoke-Expression
@@ -17,8 +15,10 @@ New-Item -ItemType Directory -Force $stateDirectory | Out-Null
 Set-Content (Join-Path $stateDirectory 'marker') 'preserve'
 scoop install $scoopManifest
 if ($LASTEXITCODE -ne 0) { throw 'Scoop install failed.' }
-& $python $smokeScript (Get-Command $commandName).Source --version $version
-if ($LASTEXITCODE -ne 0) { throw 'Scoop smoke test failed.' }
+& "$PSScriptRoot/test-installed-command.ps1" `
+  -Executable (Get-Command $commandName).Source `
+  -CommandName $commandName `
+  -Version $version
 scoop update $commandName
 if ($LASTEXITCODE -ne 0) { throw 'Scoop update failed.' }
 if ((Get-Content (Join-Path $stateDirectory 'marker')) -ne 'preserve') { throw 'Scoop update changed user data.' }
@@ -42,8 +42,10 @@ $packageRoot = Join-Path $env:ChocolateyInstall "lib\$commandName"
 $installedExecutable = Get-ChildItem $packageRoot -Filter "$commandName.exe" -Recurse |
   Select-Object -First 1 -ExpandProperty FullName
 if (-not $installedExecutable) { throw 'Chocolatey installed executable was not found.' }
-& $python $smokeScript $installedExecutable --version $version
-if ($LASTEXITCODE -ne 0) { throw 'Chocolatey smoke test failed.' }
+& "$PSScriptRoot/test-installed-command.ps1" `
+  -Executable $installedExecutable `
+  -CommandName $commandName `
+  -Version $version
 choco upgrade $commandName --source artifacts/chocolatey --version $version --force --yes --no-progress
 if ($LASTEXITCODE -ne 0) { throw 'Chocolatey upgrade failed.' }
 if ((Get-Content (Join-Path $stateDirectory 'marker')) -ne 'preserve') { throw 'Chocolatey update changed user data.' }
