@@ -1,4 +1,15 @@
+<div align="center">
+
+<img src="assets/package-release-workflows.svg" width="128" height="128" alt="Package Release Workflows logo">
+
 # Package Release Workflows
+
+**Reusable, governed delivery across package and container channels.**
+
+[![Reusable GitHub Actions](https://img.shields.io/badge/GitHub_Actions-reusable_workflows-2088FF?logo=githubactions&logoColor=white)](.github/workflows/package-dotnet.yml)
+[![Release channels](https://img.shields.io/badge/release_channels-packages_%7C_archives_%7C_containers-f59e0b)](.github/workflows/package.yml)
+
+</div>
 
 Reusable GitHub workflows for .NET release packaging and publishing. The caller is
 the product authority; this repository owns the packaging graph.

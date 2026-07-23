@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title description">
+  <title id="title">package-release-workflows</title>
+  <desc id="description">A package moving through connected release workflow stages.</desc>
+  <defs>
+    <linearGradient id="workflow" x1="40" y1="38" x2="219" y2="219" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+  </defs>
+  <rect x="18" y="18" width="220" height="220" rx="48" fill="#171522"/>
+  <path d="M43 75h49M164 75h49M67 75v45M189 75v45M67 181v-31M189 181v-31M92 181h72" fill="none" stroke="#667085" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="43" cy="75" r="14" fill="#f59e0b"/>
+  <circle cx="213" cy="75" r="14" fill="#a78bfa"/>
+  <circle cx="67" cy="181" r="14" fill="#38bdf8"/>
+  <circle cx="189" cy="181" r="14" fill="#4ade80"/>
+  <path d="M89 102l39-22 39 22-39 23-39-23Z" fill="#30294a" stroke="url(#workflow)" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M89 102v45l39 23 39-23v-45M128 125v45" fill="none" stroke="#e4e7ec" stroke-width="7" stroke-linejoin="round"/>
+</svg>
