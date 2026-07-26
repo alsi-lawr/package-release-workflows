@@ -4,7 +4,7 @@ $version = $env:VERSION
 $commandName = $env:COMMAND_NAME
 $smokeScript = Join-Path $env:GITHUB_WORKSPACE $env:SMOKE_SCRIPT
 $manifestDirectory = Join-Path $env:GITHUB_WORKSPACE ($env:WINGET_MANIFEST_PREFIX + '/' + $version)
-$python = (Get-Command python -CommandType Application -ErrorAction Stop).Source
+$python = (Get-Command python -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
 
 $installerManifest = @(Get-ChildItem $manifestDirectory -Filter '*.installer.yaml')
 if ($installerManifest.Count -ne 1) { throw 'Expected exactly one WinGet installer manifest.' }
