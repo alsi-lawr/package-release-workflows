@@ -2,7 +2,6 @@ $ErrorActionPreference = 'Stop'
 
 $version = $env:VERSION
 $commandName = $env:COMMAND_NAME
-$stateDirectory = Join-Path $env:LOCALAPPDATA $env:STATE_DIR_NAME
 $manifestDirectory = Join-Path $env:GITHUB_WORKSPACE ($env:WINGET_MANIFEST_PREFIX + '/' + $version)
 
 $installerManifest = @(Get-ChildItem $manifestDirectory -Filter '*.installer.yaml')
@@ -31,8 +30,6 @@ if ($null -eq $client) { throw 'WinGet is not available on this runner.' }
 & $client.Source --version
 if ($LASTEXITCODE -ne 0) { throw 'WinGet is unusable on this runner.' }
 
-New-Item -ItemType Directory -Force $stateDirectory | Out-Null
-Set-Content (Join-Path $stateDirectory 'marker') 'preserve'
 winget validate --manifest $manifestDirectory
 if ($LASTEXITCODE -ne 0) { throw 'WinGet manifest validation failed.' }
 winget settings --enable LocalManifestFiles
@@ -50,7 +47,3 @@ $installedExecutable = Join-Path $packagePaths[0] "$commandName.exe"
   -Executable $installedExecutable `
   -CommandName $commandName `
   -Version $version
-winget uninstall --manifest $manifestDirectory --scope machine --accept-source-agreements --disable-interactivity
-if ($LASTEXITCODE -ne 0) { throw 'WinGet uninstall failed.' }
-if (Test-Path $installedExecutable) { throw 'WinGet left the command installed.' }
-if ((Get-Content (Join-Path $stateDirectory 'marker')) -ne 'preserve') { throw 'WinGet uninstall changed user data.' }

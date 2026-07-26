@@ -18,11 +18,11 @@ the product authority; this repository owns the packaging graph.
 - `package.yml`: validates the tagged version across .NET, Nix, and JReleaser;
   publishes the five supported RIDs; assembles archives and metadata; checks
   SHA-256 checksums; and produces release-asset attestations.
-- `package-release.yml`: validates credentials and package lifecycles, creates or
-  verifies the GitHub release without overwriting it, publishes package metadata
+- `package-release.yml`: validates credentials and package installation smoke
+  checks, creates or verifies the GitHub release without overwriting it, publishes package metadata
   and images, then promotes versioned outputs to `latest` only after success.
 - `release-package-tests.yml` and `validation.yml`: reusable archive and package
-  lifecycle validation stages used by the release graph.
+  install-and-smoke validation stages used by the release graph.
 
 The release graph includes Homebrew, Scoop, Chocolatey, WinGet, Nixpkgs, Docker
 Hub bot/site multi-architecture images, and Nix-built GHCR bot/site

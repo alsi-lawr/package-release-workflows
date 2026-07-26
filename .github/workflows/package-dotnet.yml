@@ -19,10 +19,6 @@ on:
         description: Script used to validate GHCR images.
         type: string
         required: true
-      state_directory_name:
-        description: Per-user marker directory name used by smoke tests.
-        type: string
-        required: true
       smoke_script:
         description: Smoke script path.
         type: string
@@ -44,7 +40,7 @@ on:
         type: string
         required: true
       winget_identifier:
-        description: WinGet package identifier to uninstall and validate.
+        description: WinGet package identifier associated with the manifests.
         type: string
         required: true
       release_title_prefix:
@@ -88,19 +84,19 @@ on:
         type: boolean
         required: true
       run_package_tests:
-        description: Execute optional platform lifecycle tests via separate workflow.
+        description: Execute optional package installation and installed-product smoke checks via separate workflow.
         type: boolean
         required: true
       run_homebrew_test:
-        description: Run Homebrew lifecycle test job.
+        description: Run the Homebrew install-and-smoke job.
         type: boolean
         required: true
       run_windows_packaging_tests:
-        description: Run Scoop + Chocolatey lifecycle tests.
+        description: Run the Scoop and Chocolatey install-and-smoke job.
         type: boolean
         required: true
       run_winget_test:
-        description: Run WinGet manifest validation and lifecycle test.
+        description: Run the WinGet manifest validation and install-and-smoke job.
         type: boolean
         required: true
       jreleaser_image:
@@ -256,7 +252,6 @@ jobs:
       package_name: ${{ inputs.package_name }}
       command_name: ${{ inputs.command_name }}
       release_name: ${{ inputs.release_name }}
-      state_directory_name: ${{ inputs.state_directory_name }}
       smoke_script: ${{ inputs.smoke_script }}
       brew_formula_path: ${{ inputs.brew_formula_path }}
       scoop_manifest_path: ${{ inputs.scoop_manifest_path }}

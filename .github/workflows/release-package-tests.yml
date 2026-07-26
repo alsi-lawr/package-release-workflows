@@ -1,4 +1,4 @@
-name: Test release package lifecycles
+name: Test release package installation and installed-product smoke checks
 
 on:
   workflow_call:
@@ -9,10 +9,6 @@ on:
         required: true
       command_name:
         description: Installed executable to validate.
-        type: string
-        required: true
-      state_directory_name:
-        description: Per-user marker directory name used by smoke tests.
         type: string
         required: true
       smoke_script:
@@ -40,15 +36,15 @@ on:
         type: string
         required: true
       run_homebrew_test:
-        description: Enable the Homebrew lifecycle test.
+        description: Enable the Homebrew install-and-smoke job.
         type: boolean
         required: true
       run_windows_packaging_tests:
-        description: Enable Scoop and Chocolatey lifecycle tests.
+        description: Enable the Scoop and Chocolatey install-and-smoke job.
         type: boolean
         required: true
       run_winget_test:
-        description: Enable WinGet manifest validation and lifecycle test.
+        description: Enable the WinGet manifest validation and install-and-smoke job.
         type: boolean
         required: true
 
@@ -58,7 +54,7 @@ permissions:
 jobs:
   package-homebrew-test:
     if: ${{ inputs.run_homebrew_test }}
-    name: Test the Homebrew lifecycle
+    name: Install and smoke-test the Homebrew package
     runs-on: macos-latest
     permissions:
       contents: read
@@ -77,19 +73,18 @@ jobs:
         with:
           name: package-metadata-${{ inputs.version }}
           path: artifacts/package-metadata
-      - name: Install, smoke, reinstall, and uninstall the formula
+      - name: Install and smoke-test the formula
         env:
           VERSION: ${{ inputs.version }}
           FORMULA_PATH: ${{ inputs.brew_formula_path }}
           SMOKE_SCRIPT: ${{ inputs.smoke_script }}
           COMMAND_NAME: ${{ inputs.command_name }}
-          STATE_DIR_NAME: ${{ inputs.state_directory_name }}
         run: |
           "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/test-homebrew-package.sh"
 
   package-windows-tests:
     if: ${{ inputs.run_windows_packaging_tests }}
-    name: Test Scoop and Chocolatey lifecycles
+    name: Install and smoke-test Scoop and Chocolatey packages
     runs-on: windows-latest
     permissions:
       contents: read
@@ -108,12 +103,11 @@ jobs:
         with:
           name: package-metadata-${{ inputs.version }}
           path: artifacts/package-metadata
-      - name: Test Scoop and Chocolatey package lifecycles
+      - name: Install and smoke-test the Scoop and Chocolatey packages
         shell: pwsh
         env:
           VERSION: ${{ inputs.version }}
           COMMAND_NAME: ${{ inputs.command_name }}
-          STATE_DIR_NAME: ${{ inputs.state_directory_name }}
           SCOOP_MANIFEST: ${{ inputs.scoop_manifest_path }}
           CHOCOLATEY_NUSPEC: ${{ inputs.chocolatey_nuspec_path }}
         run: |
@@ -121,7 +115,7 @@ jobs:
 
   package-winget-test:
     if: ${{ inputs.run_winget_test }}
-    name: Test the WinGet lifecycle on a Windows client
+    name: Validate, install, and smoke-test WinGet on a Windows client
     runs-on: windows-11-arm
     permissions:
       contents: read
@@ -140,12 +134,11 @@ jobs:
         with:
           name: package-metadata-${{ inputs.version }}
           path: artifacts/package-metadata
-      - name: Provision WinGet and test its package lifecycle
+      - name: Validate, install, and smoke-test the WinGet package
         shell: pwsh
         env:
           VERSION: ${{ inputs.version }}
           COMMAND_NAME: ${{ inputs.command_name }}
-          STATE_DIR_NAME: ${{ inputs.state_directory_name }}
           WINGET_MANIFEST_PREFIX: ${{ inputs.winget_manifest_prefix }}
           WINGET_IDENTIFIER: ${{ inputs.winget_identifier }}
         run: |
