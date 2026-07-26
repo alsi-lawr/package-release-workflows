@@ -31,10 +31,6 @@ on:
         description: Prefix for WinGet manifests under artifacts package metadata.
         type: string
         required: true
-      winget_identifier:
-        description: WinGet package identifier.
-        type: string
-        required: true
       run_homebrew_test:
         description: Enable the Homebrew install-and-smoke job.
         type: boolean
@@ -142,6 +138,5 @@ jobs:
           COMMAND_NAME: ${{ inputs.command_name }}
           SMOKE_SCRIPT: ${{ inputs.smoke_script }}
           WINGET_MANIFEST_PREFIX: ${{ inputs.winget_manifest_prefix }}
-          WINGET_IDENTIFIER: ${{ inputs.winget_identifier }}
         run: |
           & "$env:GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/test-winget-package.ps1"

@@ -47,10 +47,6 @@ on:
         description: Path prefix to winget manifests (version appended automatically).
         type: string
         required: true
-      winget_identifier:
-        description: WinGet package identifier associated with the manifests.
-        type: string
-        required: true
       release_title_prefix:
         description: Release title prefix used for GitHub release titles.
         type: string
@@ -252,7 +248,6 @@ jobs:
       scoop_manifest_path: ${{ inputs.scoop_manifest_path }}
       chocolatey_nuspec_path: ${{ inputs.chocolatey_nuspec_path }}
       winget_manifest_prefix: ${{ inputs.winget_manifest_prefix }}
-      winget_identifier: ${{ inputs.winget_identifier }}
       run_homebrew_test: ${{ inputs.run_homebrew_test }}
       run_windows_packaging_tests: ${{ inputs.run_windows_packaging_tests }}
       run_winget_test: ${{ inputs.run_winget_test }}
