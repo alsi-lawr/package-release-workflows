@@ -108,6 +108,7 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
           COMMAND_NAME: ${{ inputs.command_name }}
+          SMOKE_SCRIPT: ${{ inputs.smoke_script }}
           SCOOP_MANIFEST: ${{ inputs.scoop_manifest_path }}
           CHOCOLATEY_NUSPEC: ${{ inputs.chocolatey_nuspec_path }}
         run: |
@@ -139,6 +140,7 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
           COMMAND_NAME: ${{ inputs.command_name }}
+          SMOKE_SCRIPT: ${{ inputs.smoke_script }}
           WINGET_MANIFEST_PREFIX: ${{ inputs.winget_manifest_prefix }}
           WINGET_IDENTIFIER: ${{ inputs.winget_identifier }}
         run: |

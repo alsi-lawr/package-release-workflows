@@ -2,20 +2,14 @@ $ErrorActionPreference = 'Stop'
 
 $version = $env:VERSION
 $commandName = $env:COMMAND_NAME
+$smokeScript = Join-Path $env:GITHUB_WORKSPACE $env:SMOKE_SCRIPT
 $manifestDirectory = Join-Path $env:GITHUB_WORKSPACE ($env:WINGET_MANIFEST_PREFIX + '/' + $version)
 
 $installerManifest = @(Get-ChildItem $manifestDirectory -Filter '*.installer.yaml')
 if ($installerManifest.Count -ne 1) { throw 'Expected exactly one WinGet installer manifest.' }
 $manifestLines = @(Get-Content $installerManifest[0].FullName)
 if (-not ($manifestLines -contains '    ArchiveBinariesDependOnPath: true')) {
-  if ($version -ne '0.1.2') { throw 'WinGet archive manifest must enable ArchiveBinariesDependOnPath.' }
-  $updatedLines = foreach ($line in $manifestLines) {
-    $line
-    if ($line -eq '    NestedInstallerType: portable') {
-      '    ArchiveBinariesDependOnPath: true'
-    }
-  }
-  Set-Content $installerManifest[0].FullName $updatedLines
+  throw 'WinGet archive manifest must enable ArchiveBinariesDependOnPath.'
 }
 
 $client = Get-Command winget -ErrorAction SilentlyContinue
@@ -43,7 +37,5 @@ $packagePaths = @(@($machinePath, $userPath) -split ';' | Where-Object {
 })
 if ($packagePaths.Count -ne 1) { throw 'WinGet did not add exactly one installed package directory to PATH.' }
 $installedExecutable = Join-Path $packagePaths[0] "$commandName.exe"
-& "$PSScriptRoot/test-installed-command.ps1" `
-  -Executable $installedExecutable `
-  -CommandName $commandName `
-  -Version $version
+python $smokeScript $installedExecutable --version $version
+if ($LASTEXITCODE -ne 0) { throw 'WinGet installed-product smoke failed.' }
