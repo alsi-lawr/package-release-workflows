@@ -27,6 +27,11 @@ on:
         description: JSON array describing publish matrix entries.
         type: string
         required: true
+      package_publish_prepare_script:
+        description: Optional Python script that prepares each RID publish directory before smoke validation.
+        type: string
+        required: false
+        default: ""
       jreleaser_image:
         description: JReleaser container image.
         type: string
@@ -128,7 +133,7 @@ jobs:
         shell: pwsh
         run: >-
           python -c "import platform, sys; actual = platform.machine().lower(); expected = '${{ matrix.machine }}'; print(f'runner architecture: {actual}'); sys.exit(0 if actual == expected else 1)"
-      - name: Publish the self-contained untrimmed directory
+      - name: Publish the caller-configured self-contained directory
         shell: pwsh
         run: >-
           dotnet publish "${{ inputs.dotnet_project_path }}"
@@ -140,9 +145,17 @@ jobs:
           -p:SourceRevisionId="${{ needs.version.outputs.revision }}"
           -p:DebugSymbols=false
           -p:DebugType=None
-          -p:PublishTrimmed=false
           -p:PublishSingleFile=false
-      - name: Smoke version, help, and offline serve
+      - name: Prepare the RID publish directory
+        if: ${{ inputs.package_publish_prepare_script != '' }}
+        shell: pwsh
+        env:
+          PREPARE_SCRIPT: ${{ inputs.package_publish_prepare_script }}
+        run: >-
+          python "$env:PREPARE_SCRIPT"
+          --rid "${{ matrix.rid }}"
+          --publish-directory "artifacts/publish/${{ matrix.rid }}"
+      - name: Run the caller publish smoke
         shell: pwsh
         run: >-
           python "${{ inputs.package_smoke_script }}"

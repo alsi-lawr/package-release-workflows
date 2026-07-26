@@ -179,6 +179,11 @@ on:
         description: JSON array describing publish matrix entries.
         type: string
         required: true
+      package_publish_prepare_script:
+        description: Optional Python script that prepares each RID publish directory before smoke validation.
+        type: string
+        required: false
+        default: ""
       package_smoke_script:
         description: Smoke script to validate the published binary.
         type: string
@@ -227,6 +232,7 @@ jobs:
       dotnet_version: ${{ inputs.dotnet_version }}
       dotnet_project_path: ${{ inputs.dotnet_project_path }}
       package_smoke_script: ${{ inputs.package_smoke_script }}
+      package_publish_prepare_script: ${{ inputs.package_publish_prepare_script }}
       package_metadata_finalize_script: ${{ inputs.package_metadata_finalize_script }}
       package_publish_matrix: ${{ inputs.package_publish_matrix }}
       jreleaser_image: ${{ inputs.jreleaser_image }}

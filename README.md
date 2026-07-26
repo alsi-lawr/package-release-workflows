@@ -30,6 +30,12 @@ multi-architecture images. `package.yml` requires the release matrix to contain
 exactly `linux-x64`, `linux-arm64`, `osx-arm64`, `win-x64`, and `win-arm64`;
 Linux archives are `.tar.gz` and macOS/Windows archives are `.zip`.
 
+Project publish properties, including trimming and Native AOT, are owned by the
+caller. An optional `package_publish_prepare_script` runs after each RID publish
+as `python SCRIPT --rid RID --publish-directory DIRECTORY`, before smoke
+validation. Caller-provided smoke scripts validate both raw publishes and
+installed packages across the supported platforms.
+
 Tagged releases prepare and push the exact versioned WinGet and nixpkgs fork
 branches, but never open upstream pull requests. Callers use the separate
 submit-upstream-prs.yml reusable workflow from a thin workflow_dispatch caller
