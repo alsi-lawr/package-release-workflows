@@ -127,9 +127,9 @@ jobs:
           path: .shared-release-workflows
           persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
-          python-version: "3.14"
+          python-version: "3.x"
       - name: Download JReleaser package metadata
         uses: actions/download-artifact@v8
         with:
