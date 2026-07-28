@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   validate-request:
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     steps:
       - name: Require a strict version and at least one selected channel
         env:
@@ -43,7 +43,7 @@ jobs:
   submit-winget:
     if: ${{ inputs.submit_winget }}
     needs: validate-request
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with: { repository: alsi-lawr/package-release-workflows, ref: main, path: .shared-release-workflows, persist-credentials: false }
@@ -64,7 +64,7 @@ jobs:
   submit-nixpkgs:
     if: ${{ inputs.submit_nixpkgs }}
     needs: validate-request
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with: { repository: alsi-lawr/package-release-workflows, ref: main, path: .shared-release-workflows, persist-credentials: false }

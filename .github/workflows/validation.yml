@@ -14,7 +14,7 @@ permissions:
 jobs:
   package:
     name: Validate release archives
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     steps:
       - name: Download release assets
         uses: actions/download-artifact@v8

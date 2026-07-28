@@ -14,6 +14,8 @@
 Reusable GitHub workflows for .NET release packaging and publishing. The caller is
 the product authority; this repository owns the packaging graph.
 
+- `rust-bun.yml`: runs one caller-owned Bash script across a configurable Rust/Bun
+  RID matrix, defaulting to all five conventional release RIDs.
 - `package-dotnet.yml`: the one-call .NET release entry point for callers.
 - `package.yml`: validates the tagged version across .NET, Nix, and JReleaser;
   publishes the five supported RIDs; assembles archives and metadata; checks
@@ -62,6 +64,18 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       PACKAGE_REPOSITORY_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
+```
+
+Rust/Bun callers provide only their RID matrix and repository-local script:
+
+```yaml
+jobs:
+  ci:
+    uses: OWNER/package-release-workflows/.github/workflows/rust-bun.yml@main
+    with:
+      rids: >-
+        [{"rid":"linux-x64","runner":"ubuntu-latest","target":"x86_64-unknown-linux-gnu"},{"rid":"win-x64","runner":"windows-latest","target":"x86_64-pc-windows-msvc"}]
+      script: scripts/ci.sh
 ```
 
 Nested shared workflows use fully qualified `@main` references rather than

@@ -60,7 +60,7 @@ permissions:
 jobs:
   version:
     name: Validate and compare the release version
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
@@ -175,7 +175,7 @@ jobs:
     needs:
       - version
       - native-publish
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       attestations: write

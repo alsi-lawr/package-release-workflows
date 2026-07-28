@@ -193,7 +193,7 @@ jobs:
 
   credential-preflight:
     name: Validate all enabled publication credentials
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     steps:
       - name: Fail before publication when an enabled channel lacks credentials
         env:
@@ -271,7 +271,7 @@ jobs:
     needs:
       - validation
       - credential-preflight
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
@@ -310,7 +310,7 @@ jobs:
       - validation
       - credential-preflight
       - github-release
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     env:
@@ -437,7 +437,7 @@ jobs:
       - validation
       - credential-preflight
       - github-release
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     env:
@@ -581,7 +581,7 @@ jobs:
     if: ${{ always() && inputs.publish_docker_hub && needs.docker-hub-images.result == 'success' }}
     needs:
       - docker-hub-images
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         image: ${{ fromJson(inputs.docker_manifest_images) }}
@@ -660,7 +660,7 @@ jobs:
     if: ${{ always() && inputs.publish_nix_images && needs.nix-images.result == 'success' }}
     needs:
       - nix-images
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     permissions:
       packages: write
     strategy:
@@ -701,7 +701,7 @@ jobs:
       - publish-chocolatey
       - docker-hub-manifests
       - nix-manifests
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
