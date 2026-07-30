@@ -6,6 +6,9 @@ $smokeScript = Join-Path $env:GITHUB_WORKSPACE $env:SMOKE_SCRIPT
 $scoopManifest = Join-Path $env:GITHUB_WORKSPACE $env:SCOOP_MANIFEST
 $chocolateyNuspec = Join-Path $env:GITHUB_WORKSPACE $env:CHOCOLATEY_NUSPEC
 
+# Keep smoke-test state disposable when a Serilog-based package is stopped on Windows.
+$env:Serilog__WriteTo__0__Name = 'Console'
+
 Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
 Invoke-RestMethod https://get.scoop.sh | Invoke-Expression
 $scoopShims = Join-Path $env:USERPROFILE 'scoop\shims'
