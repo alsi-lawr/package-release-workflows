@@ -78,6 +78,21 @@ jobs:
       script: scripts/ci.sh
 ```
 
+For one NuGet package, use the smaller trusted-publishing action from a job in the package
+repository:
+
+```yaml
+- uses: alsi-lawr/package-release-workflows/actions/deploy-nuget@main
+  with:
+    project: src/MyTool/MyTool.csproj
+    user: my-nuget-user
+    dotnet-version: 10.0.300
+```
+
+The caller grants `contents: read` and `id-token: write`. The action accepts only a `vX.Y.Z` tag,
+packs one nupkg and snupkg, requests a short-lived NuGet.org key, and publishes both packages. It
+does not install or smoke-test the package.
+
 Nested shared workflows use fully qualified `@main` references rather than
 relative paths: GitHub resolves a relative reusable-workflow reference from the
 caller commit, not from this repository. The shared repository must therefore be
