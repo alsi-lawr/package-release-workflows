@@ -12,6 +12,10 @@ inputs:
     description: .NET SDK version
     required: false
     default: 10.0.x
+  tag:
+    description: Version tag to publish when the workflow is manually retried
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -19,15 +23,38 @@ runs:
     - name: Read package version
       id: version
       shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        RELEASE_TAG: ${{ inputs.tag }}
       run: |
-        if [[ "$GITHUB_REF_TYPE" != "tag" \
-          || ! "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+        if [[ -z "$RELEASE_TAG" ]]
         then
-          echo "Expected a version tag in the form vX.Y.Z, got '$GITHUB_REF_NAME'." >&2
+          if [[ "$GITHUB_REF_TYPE" != "tag" ]]
+          then
+            echo "Expected a tag event or an explicit tag." >&2
+            exit 1
+          fi
+
+          RELEASE_TAG="$GITHUB_REF_NAME"
+        fi
+
+        if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+        then
+          echo "Expected a version tag in the form vX.Y.Z, got '$RELEASE_TAG'." >&2
           exit 1
         fi
 
-        echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        tag_commit="$(git rev-list -n 1 "$RELEASE_TAG")"
+        checkout_commit="$(git rev-parse HEAD)"
+
+        if [[ "$tag_commit" != "$checkout_commit" ]]
+        then
+          echo "The checkout does not match $RELEASE_TAG." >&2
+          exit 1
+        fi
+
+        echo "commit=$checkout_commit" >> "$GITHUB_OUTPUT"
+        echo "value=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
 
     - name: Set up .NET
       uses: actions/setup-dotnet@v6
@@ -39,6 +66,7 @@ runs:
       shell: bash
       working-directory: ${{ github.workspace }}
       env:
+        COMMIT: ${{ steps.version.outputs.commit }}
         PROJECT: ${{ inputs.project }}
         VERSION: ${{ steps.version.outputs.value }}
       run: |
@@ -50,7 +78,7 @@ runs:
           --output "$package_directory" \
           -p:PackageVersion="$VERSION" \
           -p:ContinuousIntegrationBuild=true \
-          -p:RepositoryCommit="$GITHUB_SHA"
+          -p:RepositoryCommit="$COMMIT"
 
         mapfile -t packages < <(find "$package_directory" -maxdepth 1 -type f -name '*.nupkg')
         mapfile -t symbols < <(find "$package_directory" -maxdepth 1 -type f -name '*.snupkg')
