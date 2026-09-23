@@ -18,7 +18,7 @@ the product authority; this repository owns the packaging graph.
   RID matrix, defaulting to all five conventional release RIDs.
 - `package-dotnet.yml`: the one-call .NET release entry point for callers.
 - `package.yml`: validates the tagged version across .NET, Nix, and JReleaser;
-  publishes the five supported RIDs; assembles archives and metadata; checks
+  publishes the caller-selected supported RIDs; assembles archives and metadata; checks
   SHA-256 checksums; and produces release-asset attestations.
 - `package-release.yml`: validates credentials and package installation smoke
   checks, creates or verifies the GitHub release without overwriting it, publishes package metadata
@@ -28,14 +28,22 @@ the product authority; this repository owns the packaging graph.
 
 The release graph includes Homebrew, Scoop, Chocolatey, WinGet, Nixpkgs, Docker
 Hub bot/site multi-architecture images, and Nix-built GHCR bot/site
-multi-architecture images. `package.yml` requires the release matrix to contain
-exactly `linux-x64`, `linux-arm64`, `osx-arm64`, `win-x64`, and `win-arm64`;
-Linux archives are `.tar.gz` and macOS/Windows archives are `.zip`.
+multi-architecture images. `package_publish_matrix` selects a nonempty subset of
+`linux-x64`, `linux-arm64`, `osx-arm64`, `win-x64`, and `win-arm64`, without
+implying support for the unselected targets. Linux archives are `.tar.gz` and
+macOS/Windows archives are `.zip`. Existing five-RID callers retain that matrix.
 
 Project publish properties, including trimming and Native AOT, are owned by the
 caller. An optional `package_publish_prepare_script` runs after each RID publish
 as `python SCRIPT --rid RID --publish-directory DIRECTORY`, before smoke
-validation. Caller-provided smoke scripts validate both raw publishes and
+validation. An optional `package_publish_script` replaces the bare `dotnet publish`
+step with `python SCRIPT --rid RID --publish-directory DIRECTORY --version VERSION
+--revision REVISION`; it must assemble the complete native payload in that
+directory. Matrix entries may set `publish_executable` (relative to that directory)
+and `archive_executable` (relative to the archive root) when the product launcher
+is not the default root `package_name` / `bin/package_name` path. These hooks
+do not create channel-specific installers or prove installed desktop behavior.
+Caller-provided smoke scripts validate both raw publishes and
 installed packages across the supported platforms.
 
 Tagged releases prepare and push the exact versioned WinGet and nixpkgs fork

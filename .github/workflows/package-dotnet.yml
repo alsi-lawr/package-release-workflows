@@ -184,6 +184,11 @@ on:
         type: string
         required: false
         default: ""
+      package_publish_script:
+        description: Optional Python script that builds a complete RID payload instead of dotnet publish.
+        type: string
+        required: false
+        default: ""
       package_smoke_script:
         description: Smoke script to validate the published binary.
         type: string
@@ -233,6 +238,7 @@ jobs:
       dotnet_project_path: ${{ inputs.dotnet_project_path }}
       package_smoke_script: ${{ inputs.package_smoke_script }}
       package_publish_prepare_script: ${{ inputs.package_publish_prepare_script }}
+      package_publish_script: ${{ inputs.package_publish_script }}
       package_metadata_finalize_script: ${{ inputs.package_metadata_finalize_script }}
       package_publish_matrix: ${{ inputs.package_publish_matrix }}
       jreleaser_image: ${{ inputs.jreleaser_image }}

@@ -32,8 +32,14 @@ mapfile -t assembled_archives < <(
   find out/jreleaser/assemble -maxdepth 4 -type f \
     \( -name '*.tar.gz' -o -name '*.zip' \) -print
 )
-if [ "${#existing_archives[@]}" -ne 5 ] || [ "${#assembled_archives[@]}" -ne 5 ]; then
-  echo "::error::Expected five existing and five assembled release archives." >&2
+expected_archive_count="$(python3 - <<'PY'
+import json
+import os
+print(len(json.loads(os.environ["PACKAGE_PUBLISH_MATRIX"])))
+PY
+)"
+if [ "${#existing_archives[@]}" -ne "$expected_archive_count" ] || [ "${#assembled_archives[@]}" -ne "$expected_archive_count" ]; then
+  echo "::error::Expected ${expected_archive_count} existing and assembled release archives." >&2
   exit 1
 fi
 

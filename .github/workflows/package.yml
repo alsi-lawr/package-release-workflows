@@ -32,6 +32,11 @@ on:
         type: string
         required: false
         default: ""
+      package_publish_script:
+        description: Optional Python script that builds a complete RID payload instead of dotnet publish.
+        type: string
+        required: false
+        default: ""
       jreleaser_image:
         description: JReleaser container image.
         type: string
@@ -134,6 +139,7 @@ jobs:
         run: >-
           python -c "import platform, sys; actual = platform.machine().lower(); expected = '${{ matrix.machine }}'; print(f'runner architecture: {actual}'); sys.exit(0 if actual == expected else 1)"
       - name: Publish the caller-configured self-contained directory
+        if: ${{ inputs.package_publish_script == '' }}
         shell: pwsh
         run: >-
           dotnet publish "${{ inputs.dotnet_project_path }}"
@@ -146,6 +152,20 @@ jobs:
           -p:DebugSymbols=false
           -p:DebugType=None
           -p:PublishSingleFile=false
+      - name: Build the caller-configured complete payload
+        if: ${{ inputs.package_publish_script != '' }}
+        shell: pwsh
+        env:
+          PUBLISH_SCRIPT: ${{ inputs.package_publish_script }}
+          RID: ${{ matrix.rid }}
+          VERSION: ${{ needs.version.outputs.version }}
+          REVISION: ${{ needs.version.outputs.revision }}
+        run: >-
+          python "$env:PUBLISH_SCRIPT"
+          --rid "$env:RID"
+          --publish-directory "artifacts/publish/$env:RID"
+          --version "$env:VERSION"
+          --revision "$env:REVISION"
       - name: Prepare the RID publish directory
         if: ${{ inputs.package_publish_prepare_script != '' }}
         shell: pwsh
@@ -204,11 +224,11 @@ jobs:
       - name: Restore Unix command executable modes
         env:
           PACKAGE_NAME: ${{ inputs.package_name }}
+          PACKAGE_PUBLISH_MATRIX: ${{ inputs.package_publish_matrix }}
         run: |
-          chmod +x \
-            "artifacts/publish/linux-x64/$PACKAGE_NAME" \
-            "artifacts/publish/linux-arm64/$PACKAGE_NAME" \
-            "artifacts/publish/osx-arm64/$PACKAGE_NAME"
+          python3 "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/release-archives.py" \
+            restore --matrix "$PACKAGE_PUBLISH_MATRIX" --package-name "$PACKAGE_NAME" \
+            --root artifacts/publish
       - name: Assemble release archives
         run: |
           for phase in assemble; do
@@ -225,6 +245,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PACKAGE_NAME: ${{ inputs.package_name }}
+          PACKAGE_PUBLISH_MATRIX: ${{ inputs.package_publish_matrix }}
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/reuse-existing-release-assets.sh"
@@ -252,89 +273,14 @@ jobs:
             --release-directory artifacts/release \
             --metadata-directory out/jreleaser/prepare
           cp -R out/jreleaser/prepare/. artifacts/package-metadata/
-      - name: Verify five platform release archives
+      - name: Verify selected platform release archives
         env:
           PACKAGE_NAME: ${{ inputs.package_name }}
           PACKAGE_PUBLISH_MATRIX: ${{ inputs.package_publish_matrix }}
         run: |
-          verification_root="$(mktemp -d)"
-          trap 'rm -rf "$verification_root"' EXIT
-
-          python3 - "artifacts/release" "$PACKAGE_PUBLISH_MATRIX" <<'PY'
-          import json
-          import sys
-          from pathlib import Path
-
-          release_directory = Path(sys.argv[1])
-          matrix = json.loads(sys.argv[2])
-          expected_formats = {
-              "linux-x64": "tar.gz",
-              "linux-arm64": "tar.gz",
-              "osx-arm64": "zip",
-              "win-x64": "zip",
-              "win-arm64": "zip",
-          }
-          rids = [entry.get("rid") for entry in matrix]
-          if set(rids) != set(expected_formats) or len(rids) != len(expected_formats):
-              raise SystemExit(
-                  "package_publish_matrix must contain exactly the five supported release RIDs: "
-                  + ", ".join(expected_formats)
-              )
-
-          archives = sorted(
-              path for path in release_directory.iterdir()
-              if path.is_file() and (path.name.endswith(".tar.gz") or path.suffix == ".zip")
-          )
-          if len(archives) != len(expected_formats):
-              raise SystemExit(f"expected {len(expected_formats)} release archives, found {len(archives)}")
-
-          for rid, extension in expected_formats.items():
-              matches = list(release_directory.glob(f"*-{rid}.{extension}"))
-              if len(matches) != 1:
-                  raise SystemExit(f"expected one {rid}.{extension} archive, found {len(matches)}")
-          PY
-
-          verify_archive() {
-            local rid="$1"
-            local format="$2"
-            local executable_name="$3"
-            local extract_dir="$verification_root/$rid"
-            local -a archives=()
-            local -a executables=()
-
-            mapfile -t archives < <(
-              find artifacts/release -maxdepth 1 -type f -name "*-${rid}.${format}" -print
-            )
-            if [ "${#archives[@]}" -ne 1 ]; then
-              echo "::error::Expected one ${rid} archive, found ${#archives[@]}." >&2
-              return 1
-            fi
-
-            mkdir -p "$extract_dir"
-            if [ "$format" = "tar.gz" ]; then
-              tar -xzf "${archives[0]}" -C "$extract_dir"
-            else
-              unzip -q "${archives[0]}" -d "$extract_dir"
-            fi
-
-            mapfile -t executables < <(
-              find "$extract_dir" -type f -path "*/bin/$executable_name" -print
-            )
-            if [ "${#executables[@]}" -ne 1 ]; then
-              echo "::error::Expected one bin/$executable_name in ${archives[0]}, found ${#executables[@]}." >&2
-              return 1
-            fi
-            if [ "$format" != zip ] && [ ! -x "${executables[0]}" ]; then
-              echo "::error::${executables[0]} is not executable in ${archives[0]}." >&2
-              return 1
-            fi
-          }
-
-          verify_archive linux-x64 tar.gz "$PACKAGE_NAME"
-          verify_archive linux-arm64 tar.gz "$PACKAGE_NAME"
-          verify_archive osx-arm64 zip "$PACKAGE_NAME"
-          verify_archive win-x64 zip "$PACKAGE_NAME.exe"
-          verify_archive win-arm64 zip "$PACKAGE_NAME.exe"
+          python3 "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/release-archives.py" \
+            verify --matrix "$PACKAGE_PUBLISH_MATRIX" --package-name "$PACKAGE_NAME" \
+            --root artifacts/release
       - name: Generate release asset provenance
         uses: actions/attest@v4
         with:
