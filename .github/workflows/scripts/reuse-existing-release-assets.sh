@@ -12,12 +12,14 @@ if [ "$release_revision" != "$GITHUB_SHA" ]; then
   exit 1
 fi
 
-release_directory="$(mktemp -d)"
+mkdir -p .agent-workspace
+release_directory="$(mktemp -d "$PWD/.agent-workspace/reuse-release.XXXXXXXX")"
 trap 'rm -rf "$release_directory"' EXIT
 gh release download "$tag" \
   --dir "$release_directory" \
   --pattern "$PACKAGE_NAME-v$VERSION-*.tar.gz" \
   --pattern "$PACKAGE_NAME-v$VERSION-*.zip" \
+  --pattern '*.deb' \
   --pattern checksums_sha256.txt
 (
   cd "$release_directory"
