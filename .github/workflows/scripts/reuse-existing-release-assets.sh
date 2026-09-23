@@ -23,6 +23,8 @@ gh release download "$tag" \
   --pattern '*.rpm' \
   --pattern '*.AppImage' \
   --pattern "$PACKAGE_NAME.rb" \
+  --pattern "$PACKAGE_NAME-bin.PKGBUILD" \
+  --pattern "$PACKAGE_NAME-bin.SRCINFO" \
   --pattern checksums_sha256.txt
 (
   cd "$release_directory"
