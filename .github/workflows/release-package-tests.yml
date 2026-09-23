@@ -18,7 +18,15 @@ on:
       brew_formula_path:
         description: Full path to the Homebrew formula artifact.
         type: string
-        required: true
+        default: ''
+      brew_cask_path:
+        description: Supplied Linux cask path in the release assets.
+        type: string
+        default: ''
+      brew_cask_smoke_script:
+        description: Caller script that checks an installed Linux AppImage.
+        type: string
+        default: ''
       scoop_manifest_path:
         description: Full path to Scoop manifest artifact.
         type: string
@@ -35,6 +43,10 @@ on:
         description: Enable the Homebrew install-and-smoke job.
         type: boolean
         required: true
+      run_linux_cask_test:
+        description: Enable the Linux cask install-and-smoke job.
+        type: boolean
+        default: false
       run_windows_packaging_tests:
         description: Enable the Scoop and Chocolatey install-and-smoke job.
         type: boolean
@@ -77,6 +89,43 @@ jobs:
           COMMAND_NAME: ${{ inputs.command_name }}
         run: |
           "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/test-homebrew-package.sh"
+
+  package-linux-cask-test:
+    if: ${{ inputs.run_linux_cask_test }}
+    name: Install and smoke-test the Linux Homebrew cask
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out smoke tooling
+        uses: actions/checkout@v7
+      - name: Check out shared release workflow helpers
+        uses: actions/checkout@v7
+        with:
+          repository: alsi-lawr/package-release-workflows
+          ref: main
+          path: .shared-release-workflows
+          persist-credentials: false
+      - name: Download release assets
+        uses: actions/download-artifact@v8
+        with:
+          name: release-assets-${{ inputs.version }}
+          path: artifacts/release
+      - name: Install private display tools and Homebrew
+        env:
+          NONINTERACTIVE: '1'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential procps curl file git xvfb xdotool libgtk-3-0t64 libegl1 libgles2 libgl1-mesa-dri dbus-x11
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/e53db71afc381d41c46c8baaeba10c091acf4b44/install.sh)"
+          echo /home/linuxbrew/.linuxbrew/bin >> "$GITHUB_PATH"
+      - name: Install and smoke-test the cask
+        env:
+          VERSION: ${{ inputs.version }}
+          CASK_PATH: ${{ inputs.brew_cask_path }}
+          SMOKE_SCRIPT: ${{ inputs.brew_cask_smoke_script }}
+        run: |
+          "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/test-linux-cask-package.sh"
 
   package-windows-tests:
     if: ${{ inputs.run_windows_packaging_tests }}
