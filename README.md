@@ -42,6 +42,10 @@ step with `python SCRIPT --rid RID --publish-directory DIRECTORY --version VERSI
 directory. Matrix entries may set `publish_executable` (relative to that directory)
 and `archive_executable` (relative to the archive root) when the product launcher
 is not the default root `package_name` / `bin/package_name` path. These hooks
+may also set `publish_executables` to relative paths of additional Unix payload
+executables. Archive assembly restores and verifies their execute modes after
+artifact transfer; those paths must be unchanged inside the archive.
+These hooks
 do not create channel-specific installers or prove installed desktop behavior.
 Caller-provided smoke scripts validate both raw publishes and
 installed packages across the supported platforms.
