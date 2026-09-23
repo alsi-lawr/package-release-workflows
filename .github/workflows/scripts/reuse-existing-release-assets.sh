@@ -20,6 +20,7 @@ gh release download "$tag" \
   --pattern "$PACKAGE_NAME-v$VERSION-*.tar.gz" \
   --pattern "$PACKAGE_NAME-v$VERSION-*.zip" \
   --pattern '*.deb' \
+  --pattern '*.rpm' \
   --pattern checksums_sha256.txt
 (
   cd "$release_directory"
