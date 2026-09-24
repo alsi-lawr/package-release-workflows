@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 
 $version = $env:VERSION
 $commandName = $env:COMMAND_NAME
+$executableName = if ($env:WINDOWS_EXECUTABLE_NAME) { $env:WINDOWS_EXECUTABLE_NAME } else { "$commandName.exe" }
 $smokeScript = Join-Path $env:GITHUB_WORKSPACE $env:SMOKE_SCRIPT
 $scoopManifest = Join-Path $env:GITHUB_WORKSPACE $env:SCOOP_MANIFEST
 $chocolateyNuspec = Join-Path $env:GITHUB_WORKSPACE $env:CHOCOLATEY_NUSPEC
@@ -16,7 +17,10 @@ $env:PATH = "$scoopShims;$env:PATH"
 
 scoop install $scoopManifest
 if ($LASTEXITCODE -ne 0) { throw 'Scoop install failed.' }
-$scoopExecutable = (Get-Command $commandName).Source
+$scoopRoot = (scoop prefix $commandName | Select-Object -Last 1).Trim()
+$scoopExecutable = Get-ChildItem $scoopRoot -Filter $executableName -Recurse |
+  Select-Object -First 1 -ExpandProperty FullName
+if (-not $scoopExecutable) { throw 'Scoop installed executable was not found.' }
 python $smokeScript $scoopExecutable --version $version
 if ($LASTEXITCODE -ne 0) { throw 'Scoop installed-product smoke failed.' }
 
@@ -28,7 +32,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Chocolatey install failed.' }
 refreshenv
 if (-not $?) { throw 'Chocolatey environment refresh failed after install.' }
 $packageRoot = Join-Path $env:ChocolateyInstall "lib\$commandName"
-$installedExecutable = Get-ChildItem $packageRoot -Filter "$commandName.exe" -Recurse |
+$installedExecutable = Get-ChildItem $packageRoot -Filter $executableName -Recurse |
   Select-Object -First 1 -ExpandProperty FullName
 if (-not $installedExecutable) { throw 'Chocolatey installed executable was not found.' }
 python $smokeScript $installedExecutable --version $version

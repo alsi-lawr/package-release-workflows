@@ -19,6 +19,18 @@ on:
         description: Installed command used for smoke verification.
         type: string
         required: true
+      windows_executable_name:
+        description: Windows executable file name when it differs from the package command.
+        type: string
+        default: ''
+      winget_scope:
+        description: Requested WinGet installer scope.
+        type: string
+        default: machine
+      winget_uninstall_key:
+        description: HKCU uninstall key of an installed per-user WinGet package.
+        type: string
+        default: ''
       release_name:
         description: Human-friendly product title used for release titles.
         type: string
@@ -266,6 +278,9 @@ jobs:
     with:
       version: ${{ inputs.version }}
       command_name: ${{ inputs.command_name }}
+      windows_executable_name: ${{ inputs.windows_executable_name }}
+      winget_scope: ${{ inputs.winget_scope }}
+      winget_uninstall_key: ${{ inputs.winget_uninstall_key }}
       smoke_script: ${{ inputs.smoke_script }}
       brew_formula_path: ${{ inputs.brew_formula_path }}
       brew_cask_path: ${{ inputs.brew_cask_path }}

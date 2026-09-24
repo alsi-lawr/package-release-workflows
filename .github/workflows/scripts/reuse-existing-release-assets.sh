@@ -22,6 +22,7 @@ gh release download "$tag" \
   --pattern '*.deb' \
   --pattern '*.rpm' \
   --pattern '*.AppImage' \
+  --pattern '*-setup.exe' \
   --pattern "$PACKAGE_NAME.rb" \
   --pattern "$PACKAGE_NAME-bin.PKGBUILD" \
   --pattern "$PACKAGE_NAME-bin.SRCINFO" \
