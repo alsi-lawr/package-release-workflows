@@ -82,6 +82,22 @@ class ReleaseArchiveTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "not executable"):
                 archives.verify(release, matrix)
 
+    def test_windows_archive_children_can_have_different_paths_from_publish_payload(self):
+        matrix = list(archives.entries(json.dumps([{
+            "rid": "win-x64",
+            "publish_executable": "payload/mod_conductor.exe",
+            "archive_executable": "mod_conductor.exe",
+            "publish_executables": ["payload/engine/ModConductor.Engine.exe"],
+            "archive_executables": ["engine/ModConductor.Engine.exe"],
+        }]), "modconductor"))
+        with tempfile.TemporaryDirectory() as directory:
+            release = Path(directory)
+            archive = release / "modconductor-v1.0.0-win-x64.zip"
+            with zipfile.ZipFile(archive, "w") as file:
+                file.writestr("modconductor/mod_conductor.exe", b"desktop")
+                file.writestr("modconductor/engine/ModConductor.Engine.exe", b"engine")
+            archives.verify(release, matrix)
+
     def test_duplicate_or_unsupported_rids_fail_before_archive_work(self):
         for matrix in ([{"rid": "linux-x64"}, {"rid": "linux-x64"}], [{"rid": "osx-x64"}]):
             with self.subTest(matrix=matrix), self.assertRaises(ValueError):

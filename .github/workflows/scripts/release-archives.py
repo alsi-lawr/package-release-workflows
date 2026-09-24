@@ -45,16 +45,21 @@ def entries(raw_matrix, package_name):
         additional = tuple(relative_path(path) for path in additional)
         if len(set((publish_executable, *additional))) != 1 + len(additional):
             raise ValueError(f"duplicate published executable for {rid}")
+        archive_additional = entry.get("archive_executables", entry.get("publish_executables", []))
+        if not isinstance(archive_additional, list):
+            raise ValueError(f"archive_executables must be a list: {archive_additional!r}")
+        archive_additional = tuple(relative_path(path) for path in archive_additional)
         yield (
             rid,
             publish_executable,
             relative_path(entry.get("archive_executable", default_archive_executable)),
             additional,
+            archive_additional,
         )
 
 
 def restore(root, matrix):
-    for rid, publish_executable, _, additional in matrix:
+    for rid, publish_executable, _, additional, _ in matrix:
         if rid.startswith("win-"):
             continue
         for path in (publish_executable, *additional):
@@ -79,7 +84,7 @@ def verify(root, matrix):
     ]
     if len(archives) != len(matrix):
         raise ValueError(f"expected {len(matrix)} release archives, found {len(archives)}")
-    for rid, _, executable, additional in matrix:
+    for rid, _, executable, _, additional in matrix:
         extension = FORMATS[rid]
         matches = list(root.glob(f"*-{rid}.{extension}"))
         if len(matches) != 1:
