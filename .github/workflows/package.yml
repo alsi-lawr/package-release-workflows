@@ -22,6 +22,11 @@ on:
         type: string
         required: false
         default: ""
+      source_cargo_toolchain:
+        description: Optional Rust toolchain needed by the caller's source finalizer.
+        type: string
+        required: false
+        default: ""
       dotnet_version:
         description: .NET version to install.
         type: string
@@ -278,6 +283,11 @@ jobs:
           SOURCE_ARCHIVE_TEMPLATE: ${{ inputs.source_archive_template }}
         run: |
           "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/reuse-existing-release-assets.sh"
+      - name: Install source finalizer Rust toolchain
+        if: ${{ inputs.source_cargo_toolchain != '' }}
+        env:
+          SOURCE_CARGO_TOOLCHAIN: ${{ inputs.source_cargo_toolchain }}
+        run: rustup toolchain install "$SOURCE_CARGO_TOOLCHAIN" --profile minimal
       - name: Generate checksums and package metadata
         run: |
           for phase in checksum prepare; do
