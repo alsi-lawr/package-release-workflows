@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import io
 import json
 import stat
@@ -102,6 +103,44 @@ class ReleaseArchiveTests(unittest.TestCase):
         for matrix in ([{"rid": "linux-x64"}, {"rid": "linux-x64"}], [{"rid": "osx-x64"}]):
             with self.subTest(matrix=matrix), self.assertRaises(ValueError):
                 list(archives.entries(json.dumps(matrix), "sample"))
+
+    def test_source_archive_is_separate_from_platform_count_and_must_match_revision_and_checksum(self):
+        revision = "a" * 40
+        matrix = list(archives.entries(json.dumps([{"rid": "win-x64"}]), "sample"))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with zipfile.ZipFile(root / "sample-v1.0.0-win-x64.zip", "w") as file:
+                file.writestr("sample/bin/sample.exe", b"binary")
+            name = archives.source_archive_name("{package_name}-v{version}-source.tar.gz", "sample", "1.0.0")
+            with tarfile.open(root / name, "w:gz") as file:
+                payload = (revision + "\n").encode()
+                marker = tarfile.TarInfo("sample-v1.0.0/SOURCE-REVISION")
+                marker.size = len(payload)
+                file.addfile(marker, io.BytesIO(payload))
+            digest = hashlib.sha256((root / name).read_bytes()).hexdigest()
+            checksums = root / "checksums_sha256.txt"
+            checksums.write_text(f"{digest}  {name}\n")
+
+            archives.verify(root, matrix, name, revision)
+            with self.assertRaisesRegex(ValueError, "expected 1 release archives, found 2"):
+                archives.verify(root, matrix)
+            with self.assertRaisesRegex(ValueError, "source revision"):
+                archives.verify(root, matrix, name, "b" * 40)
+
+            checksums.write_text(f"{'0' * 64}  {name}\n")
+            with self.assertRaisesRegex(ValueError, "checksum does not match"):
+                archives.verify(root, matrix, name, revision)
+            checksums.unlink()
+            with self.assertRaisesRegex(ValueError, "missing release checksums"):
+                archives.verify(root, matrix, name, revision)
+            (root / name).unlink()
+            with self.assertRaisesRegex(ValueError, "missing source archive"):
+                archives.verify(root, matrix, name, revision)
+
+    def test_source_archive_template_rejects_paths_and_unexpanded_placeholders(self):
+        for template in ("../{package_name}.tar.gz", "{unknown}-source.tar.gz", "source.zip"):
+            with self.subTest(template=template), self.assertRaises(ValueError):
+                archives.source_archive_name(template, "sample", "1.0.0")
 
 
 if __name__ == "__main__":

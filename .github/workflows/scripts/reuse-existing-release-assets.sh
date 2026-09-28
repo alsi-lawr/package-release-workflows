@@ -32,9 +32,22 @@ gh release download "$tag" \
   sha256sum --check checksums_sha256.txt
 )
 
+source_archive_name=""
+archive_exclusions=()
+if [ -n "${SOURCE_ARCHIVE_TEMPLATE:-}" ]; then
+  source_archive_name="${SOURCE_ARCHIVE_TEMPLATE//\{package_name\}/$PACKAGE_NAME}"
+  source_archive_name="${source_archive_name//\{version\}/$VERSION}"
+  if [ ! -f "$release_directory/$source_archive_name" ]; then
+    echo "::error::Existing release lacks source archive $source_archive_name." >&2
+    exit 1
+  fi
+  archive_exclusions=(-not -name "$source_archive_name")
+  echo "source_sha256=$(sha256sum "$release_directory/$source_archive_name" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+fi
+
 mapfile -t existing_archives < <(
   find "$release_directory" -maxdepth 1 -type f \
-    \( -name '*.tar.gz' -o -name '*.zip' \) -print
+    \( -name '*.tar.gz' -o -name '*.zip' \) "${archive_exclusions[@]}" -print
 )
 mapfile -t assembled_archives < <(
   find out/jreleaser/assemble -maxdepth 4 -type f \
