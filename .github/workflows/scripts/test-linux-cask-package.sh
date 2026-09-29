@@ -34,5 +34,5 @@ brew install --cask --appimagedir="$appdir" "$tap/$name"
 installed="$appdir/$(basename "${images[0]}")"
 test -x "$installed" || { echo '::error::Homebrew did not install the AppImage.' >&2; exit 1; }
 bash "$smoke" "$installed" --version "$VERSION" --appimage --close-window
-brew uninstall --cask --appimagedir="$appdir" "$tap/$name"
+brew uninstall --cask "$tap/$name"
 test ! -e "$installed"
