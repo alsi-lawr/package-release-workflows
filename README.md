@@ -26,7 +26,7 @@ the product authority; this repository owns the packaging graph.
 - `release-package-tests.yml` and `validation.yml`: reusable archive and package
   install-and-smoke validation stages used by the release graph.
 
-The release graph includes Homebrew, Scoop, Chocolatey, WinGet, Nixpkgs, Docker
+The release graph includes Homebrew, Scoop, Chocolatey, WinGet, Nixpkgs, AUR, Docker
 Hub bot/site multi-architecture images, and Nix-built GHCR bot/site
 multi-architecture images. `package_publish_matrix` selects a nonempty subset of
 `linux-x64`, `linux-arm64`, `osx-arm64`, `win-x64`, and `win-arm64`, without
@@ -80,6 +80,7 @@ jobs:
       id-token: write
       packages: write
     secrets:
+      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
       CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -125,3 +126,10 @@ paths, JReleaser configuration, Nix/Docker metadata, package repository forks,
 and runners. A publishing caller needs `contents`, `packages`, `attestations`,
 and `id-token` write permissions and the required credentials for every enabled
 external channel.
+
+Set `publish_aur` to publish a caller-supplied `PKGBUILD` and `.SRCINFO`. The caller
+must provide their release-asset paths, the package base, and `AUR_SSH_PRIVATE_KEY`.
+The workflow publishes only after the matching GitHub release exists.
+
+Set `scoop_bucket_repo` when `publish_scoop` is enabled. The workflow copies the
+supplied manifest into the bucket repository's `bucket/` directory.

@@ -24,3 +24,4 @@ jobs:
           go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml
           shellcheck .github/workflows/scripts/*.sh
       - run: bash .github/workflows/scripts/test-release-archives.sh
+      - run: bash .github/workflows/scripts/test-publish-aur-package.sh
