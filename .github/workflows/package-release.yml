@@ -690,7 +690,7 @@ jobs:
         run: |
           nix build --impure ".#$OUTPUT" --out-link result-image
           loaded=$(docker load < result-image | sed -n 's/^Loaded image: //p' | tail -n 1)
-          python3 "$CONTAINER_SMOKE_SCRIPT" \
+          bash "$CONTAINER_SMOKE_SCRIPT" \
             --image "$loaded" \
             --kind "$SMOKE_KIND" \
             --version "$VERSION" \

@@ -9,4 +9,4 @@ tap_directory="$(brew --repository "$tap")"
 cp "$formula" "$tap_directory/Formula/$formula_name.rb"
 
 brew install --formula "$tap/$formula_name"
-python3 "$SMOKE_SCRIPT" "$(command -v "$COMMAND_NAME")" --version "$VERSION"
+bash "$SMOKE_SCRIPT" "$(command -v "$COMMAND_NAME")" --version "$VERSION"

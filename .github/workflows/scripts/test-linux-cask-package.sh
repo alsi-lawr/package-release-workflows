@@ -33,6 +33,6 @@ cp "$cask" "$tap_directory/Casks/$name.rb"
 brew install --cask --appimagedir="$appdir" "$tap/$name"
 installed="$appdir/$(basename "${images[0]}")"
 test -x "$installed" || { echo '::error::Homebrew did not install the AppImage.' >&2; exit 1; }
-python3 "$smoke" "$installed" --version "$VERSION" --appimage --close-window
+bash "$smoke" "$installed" --version "$VERSION" --appimage --close-window
 brew uninstall --cask --appimagedir="$appdir" "$tap/$name"
 test ! -e "$installed"

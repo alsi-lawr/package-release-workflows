@@ -21,8 +21,8 @@ $scoopRoot = (scoop prefix $commandName | Select-Object -Last 1).Trim()
 $scoopExecutable = Get-ChildItem $scoopRoot -Filter $executableName -Recurse |
   Select-Object -First 1 -ExpandProperty FullName
 if (-not $scoopExecutable) { throw 'Scoop installed executable was not found.' }
-python $smokeScript $scoopExecutable --version $version
-if ($LASTEXITCODE -ne 0) { throw 'Scoop installed-product smoke failed.' }
+& $smokeScript $scoopExecutable -Version $version
+if (-not $?) { throw 'Scoop installed-product smoke failed.' }
 
 New-Item -ItemType Directory -Force artifacts/chocolatey | Out-Null
 choco pack $chocolateyNuspec --output-directory artifacts/chocolatey
@@ -35,5 +35,5 @@ $packageRoot = Join-Path $env:ChocolateyInstall "lib\$commandName"
 $installedExecutable = Get-ChildItem $packageRoot -Filter $executableName -Recurse |
   Select-Object -First 1 -ExpandProperty FullName
 if (-not $installedExecutable) { throw 'Chocolatey installed executable was not found.' }
-python $smokeScript $installedExecutable --version $version
-if ($LASTEXITCODE -ne 0) { throw 'Chocolatey installed-product smoke failed.' }
+& $smokeScript $installedExecutable -Version $version
+if (-not $?) { throw 'Chocolatey installed-product smoke failed.' }

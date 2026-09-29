@@ -36,11 +36,11 @@ on:
         type: string
         required: true
       package_smoke_script:
-        description: Smoke script to validate the published binary.
+        description: Platform script base path to validate the published binary (.sh or .ps1).
         type: string
         required: true
       package_metadata_finalize_script:
-        description: Script that finalizes caller-specific package metadata.
+        description: Bash script that finalizes caller-specific package metadata.
         type: string
         required: true
       package_publish_matrix:
@@ -48,12 +48,12 @@ on:
         type: string
         required: true
       package_publish_prepare_script:
-        description: Optional Python script that prepares each RID publish directory before smoke validation.
+        description: Optional platform script base path that prepares each RID publish directory.
         type: string
         required: false
         default: ""
       package_publish_script:
-        description: Optional Python script that builds a complete RID payload instead of dotnet publish.
+        description: Optional platform script base path that builds a complete RID payload instead of dotnet publish.
         type: string
         required: false
         default: ""
@@ -168,8 +168,9 @@ jobs:
           dotnet-version: ${{ inputs.dotnet_version }}
       - name: Confirm the native runner architecture
         shell: pwsh
-        run: >-
-          python -c "import platform, sys; actual = platform.machine().lower(); expected = '${{ matrix.machine }}'; print(f'runner architecture: {actual}'); sys.exit(0 if actual == expected else 1)"
+        run: |
+          $actual = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+          if ($actual -ne 'X64') { throw "Expected x64 runner, found $actual" }
       - name: Publish the caller-configured self-contained directory
         if: ${{ inputs.package_publish_script == '' }}
         shell: pwsh
@@ -192,27 +193,41 @@ jobs:
           RID: ${{ matrix.rid }}
           VERSION: ${{ needs.version.outputs.version }}
           REVISION: ${{ needs.version.outputs.revision }}
-        run: >-
-          python "$env:PUBLISH_SCRIPT"
-          --rid "$env:RID"
-          --publish-directory "artifacts/publish/$env:RID"
-          --version "$env:VERSION"
-          --revision "$env:REVISION"
+        run: |
+          if ($IsWindows) {
+            & "$env:PUBLISH_SCRIPT.ps1" -Rid $env:RID -PublishDirectory "artifacts/publish/$env:RID" -Version $env:VERSION -Revision $env:REVISION
+            if (-not $?) { throw 'Caller publish failed' }
+          } else {
+            & bash "$env:PUBLISH_SCRIPT.sh" --rid "$env:RID" --publish-directory "artifacts/publish/$env:RID" --version "$env:VERSION" --revision "$env:REVISION"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
       - name: Prepare the RID publish directory
         if: ${{ inputs.package_publish_prepare_script != '' }}
         shell: pwsh
         env:
           PREPARE_SCRIPT: ${{ inputs.package_publish_prepare_script }}
-        run: >-
-          python "$env:PREPARE_SCRIPT"
-          --rid "${{ matrix.rid }}"
-          --publish-directory "artifacts/publish/${{ matrix.rid }}"
+        run: |
+          if ($IsWindows) {
+            & "$env:PREPARE_SCRIPT.ps1" -Rid "${{ matrix.rid }}" -PublishDirectory "artifacts/publish/${{ matrix.rid }}"
+            if (-not $?) { throw 'Caller prepare failed' }
+          } else {
+            & bash "$env:PREPARE_SCRIPT.sh" --rid "${{ matrix.rid }}" --publish-directory "artifacts/publish/${{ matrix.rid }}"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
       - name: Run the caller publish smoke
         shell: pwsh
-        run: >-
-          python "${{ inputs.package_smoke_script }}"
-          "${{ matrix.executable }}"
-          --version "${{ needs.version.outputs.version }}"
+        env:
+          SMOKE_SCRIPT: ${{ inputs.package_smoke_script }}
+          EXECUTABLE: ${{ matrix.executable }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          if ($IsWindows) {
+            & "$env:SMOKE_SCRIPT.ps1" -Executable $env:EXECUTABLE -Version $env:VERSION
+            if (-not $?) { throw 'Caller smoke failed' }
+          } else {
+            & bash "$env:SMOKE_SCRIPT.sh" "$env:EXECUTABLE" --version "$env:VERSION"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
       - name: Upload the RID publish directory
         uses: actions/upload-artifact@v7
         with:
@@ -258,7 +273,7 @@ jobs:
           PACKAGE_NAME: ${{ inputs.package_name }}
           PACKAGE_PUBLISH_MATRIX: ${{ inputs.package_publish_matrix }}
         run: |
-          python3 "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/release-archives.py" \
+          bash "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/release-archives.sh" \
             restore --matrix "$PACKAGE_PUBLISH_MATRIX" --package-name "$PACKAGE_NAME" \
             --root artifacts/publish
       - name: Assemble release archives
@@ -307,7 +322,7 @@ jobs:
             \( -name '*.tar.gz' -o -name '*.zip' \) \
             -exec cp {} artifacts/release/ \;
           cp out/jreleaser/checksums/checksums_sha256.txt artifacts/release/
-          "${{ inputs.package_metadata_finalize_script }}" \
+          bash "${{ inputs.package_metadata_finalize_script }}" \
             --version "${{ needs.version.outputs.version }}" \
             --release-directory artifacts/release \
             --metadata-directory out/jreleaser/prepare
@@ -321,7 +336,7 @@ jobs:
           REVISION: ${{ needs.version.outputs.revision }}
           EXISTING_SOURCE_SHA256: ${{ steps.reuse.outputs.source_sha256 }}
         run: |
-          python3 "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/release-archives.py" \
+          bash "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/release-archives.sh" \
             verify --matrix "$PACKAGE_PUBLISH_MATRIX" --package-name "$PACKAGE_NAME" \
             --root artifacts/release --source-archive-template "$SOURCE_ARCHIVE_TEMPLATE" \
             --version "$VERSION" --revision "$REVISION"
@@ -389,7 +404,7 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
           REVISION: ${{ needs.version.outputs.revision }}
         run: |
-          python3 "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/release-archives.py" \
+          bash "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/release-archives.sh" \
             verify --matrix "$PACKAGE_PUBLISH_MATRIX" --package-name "$PACKAGE_NAME" \
             --root artifacts/release --source-archive-template "$SOURCE_ARCHIVE_TEMPLATE" \
             --version "$VERSION" --revision "$REVISION"

@@ -88,23 +88,14 @@ else
   fi
   mkdir -p "$package_directory"
 
-  python3 - "$template_path" "$package_directory/package.nix" "$VERSION" "$source_hash" <<'PY'
-from pathlib import Path
-import sys
-
-template_path, output_path, version, source_hash = sys.argv[1:]
-template = Path(template_path).read_text()
-required_placeholders = ("@PACKAGE_VERSION@", "@SOURCE_HASH@")
-missing = [placeholder for placeholder in required_placeholders if placeholder not in template]
-if missing:
-    raise SystemExit(f"template is missing required placeholders: {', '.join(missing)}")
-
-rendered = template.replace("@PACKAGE_VERSION@", version).replace("@SOURCE_HASH@", source_hash)
-remaining = [placeholder for placeholder in required_placeholders if placeholder in rendered]
-if remaining:
-    raise SystemExit(f"template still contains placeholders after rendering: {', '.join(remaining)}")
-Path(output_path).write_text(rendered)
-PY
+  for placeholder in @PACKAGE_VERSION@ @SOURCE_HASH@; do
+    if ! grep -Fq "$placeholder" "$template_path"; then
+      echo "::error::Template is missing $placeholder." >&2
+      exit 1
+    fi
+  done
+  sed -e "s|@PACKAGE_VERSION@|$VERSION|g" -e "s|@SOURCE_HASH@|$source_hash|g" \
+    "$template_path" > "$package_directory/package.nix"
   cp -- "$dependencies_path" "$package_directory/$dependencies_name"
   git add -- "$package_directory"
 fi
