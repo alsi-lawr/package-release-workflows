@@ -7,7 +7,7 @@ set -euo pipefail
 : "${SMOKE_SCRIPT:?Missing SMOKE_SCRIPT}"
 
 cask="$GITHUB_WORKSPACE/$CASK_PATH"
-smoke="$GITHUB_WORKSPACE/$SMOKE_SCRIPT"
+smoke="$GITHUB_WORKSPACE/$SMOKE_SCRIPT.sh"
 test -f "$cask" || { echo "::error::Linux cask not found: $CASK_PATH" >&2; exit 1; }
 test -f "$smoke" || { echo "::error::AppImage smoke script not found: $SMOKE_SCRIPT" >&2; exit 1; }
 (

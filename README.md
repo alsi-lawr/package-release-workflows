@@ -52,7 +52,11 @@ artifact transfer; those paths must be unchanged inside the archive.
 These hooks
 do not create channel-specific installers or prove installed desktop behavior.
 Caller-provided smoke scripts validate both raw publishes and
-installed packages across the supported platforms.
+installed packages across the supported platforms. The separate
+`smoke_script` input for installed packages also takes one base path. Its
+Unix checks use `.sh`, and its Windows checks use `.ps1`. The optional
+`brew_cask_smoke_script` takes a Linux `.sh` base path. The
+`container_smoke_script` names a Bash script with its extension.
 
 Tagged releases prepare and push the exact versioned WinGet and nixpkgs fork
 branches, but never open upstream pull requests. Callers use the separate

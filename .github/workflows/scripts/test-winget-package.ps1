@@ -4,7 +4,7 @@ $version = $env:VERSION
 $commandName = $env:COMMAND_NAME
 $executableName = if ($env:WINDOWS_EXECUTABLE_NAME) { $env:WINDOWS_EXECUTABLE_NAME } else { "$commandName.exe" }
 $scope = if ($env:WINGET_SCOPE) { $env:WINGET_SCOPE } else { 'machine' }
-$smokeScript = Join-Path $env:GITHUB_WORKSPACE $env:SMOKE_SCRIPT
+$smokeScript = Join-Path $env:GITHUB_WORKSPACE "$($env:SMOKE_SCRIPT).ps1"
 $manifestDirectory = Join-Path $env:GITHUB_WORKSPACE ($env:WINGET_MANIFEST_PREFIX + '/' + $version)
 
 $installerManifest = @(Get-ChildItem $manifestDirectory -Filter '*.installer.yaml')

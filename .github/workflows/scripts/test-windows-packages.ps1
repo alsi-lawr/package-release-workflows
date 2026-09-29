@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $version = $env:VERSION
 $commandName = $env:COMMAND_NAME
 $executableName = if ($env:WINDOWS_EXECUTABLE_NAME) { $env:WINDOWS_EXECUTABLE_NAME } else { "$commandName.exe" }
-$smokeScript = Join-Path $env:GITHUB_WORKSPACE $env:SMOKE_SCRIPT
+$smokeScript = Join-Path $env:GITHUB_WORKSPACE "$($env:SMOKE_SCRIPT).ps1"
 $scoopManifest = Join-Path $env:GITHUB_WORKSPACE $env:SCOOP_MANIFEST
 $chocolateyNuspec = Join-Path $env:GITHUB_WORKSPACE $env:CHOCOLATEY_NUSPEC
 

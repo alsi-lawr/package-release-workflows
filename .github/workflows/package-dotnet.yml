@@ -32,7 +32,7 @@ on:
         type: string
         required: true
       smoke_script:
-        description: Smoke script path.
+        description: Repository-local installed-product smoke script base path (.sh on Unix, .ps1 on Windows).
         type: string
         required: true
       brew_formula_path:

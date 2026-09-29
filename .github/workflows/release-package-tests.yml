@@ -24,7 +24,7 @@ on:
         type: string
         default: ''
       smoke_script:
-        description: Smoke test script path.
+        description: Repository-local installed-product smoke script base path (.sh on Unix, .ps1 on Windows).
         type: string
         required: true
       brew_formula_path:
@@ -36,7 +36,7 @@ on:
         type: string
         default: ''
       brew_cask_smoke_script:
-        description: Caller script that checks an installed Linux AppImage.
+        description: Repository-local Linux AppImage smoke script base path (.sh).
         type: string
         default: ''
       scoop_manifest_path:
