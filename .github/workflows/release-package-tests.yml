@@ -130,6 +130,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential procps curl file git xvfb xdotool libgtk-3-0t64 libegl1 libgles2 libgl1-mesa-dri dbus-x11
           /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/e53db71afc381d41c46c8baaeba10c091acf4b44/install.sh)"
+          git config --global user.name package-release-workflows
+          git config --global user.email package-release-workflows@users.noreply.github.com
           echo /home/linuxbrew/.linuxbrew/bin >> "$GITHUB_PATH"
       - name: Install and smoke-test the cask
         env:
@@ -176,6 +178,7 @@ jobs:
     if: ${{ inputs.run_winget_test }}
     name: Validate, install, and smoke-test WinGet on a Windows client
     runs-on: windows-2025
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:

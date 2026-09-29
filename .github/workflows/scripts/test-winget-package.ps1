@@ -32,7 +32,7 @@ winget validate --manifest $manifestDirectory
 if ($LASTEXITCODE -ne 0) { throw 'WinGet manifest validation failed.' }
 winget settings --enable LocalManifestFiles
 if ($LASTEXITCODE -ne 0) { throw 'WinGet could not enable local manifest files.' }
-winget install --manifest $manifestDirectory --scope $scope --accept-package-agreements --accept-source-agreements --disable-interactivity
+winget install --manifest $manifestDirectory --scope $scope --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
 if ($LASTEXITCODE -ne 0) { throw 'WinGet install failed.' }
 if ($env:WINGET_UNINSTALL_KEY) {
   $registration = Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$env:WINGET_UNINSTALL_KEY"
