@@ -48,6 +48,6 @@ if git diff --cached --quiet; then
 fi
 git -c user.name='github-actions[bot]' \
   -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-  commit -m "Update $PACKAGE_NAME Linux cask to v$VERSION"
+  commit -m "chore: publish $PACKAGE_NAME $VERSION"
 git push origin "$branch"
 echo "Linux cask v$VERSION was pushed to $TAP_REPO:$branch."

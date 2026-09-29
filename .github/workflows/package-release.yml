@@ -63,6 +63,10 @@ on:
         description: Full path to scoop manifest artifact.
         type: string
         required: true
+      scoop_bucket_repo:
+        description: Existing owner/repository Scoop bucket for the supplied manifest.
+        type: string
+        default: ''
       chocolatey_nuspec_path:
         description: Full path to chocolatey nuspec.
         type: string
@@ -99,6 +103,22 @@ on:
         description: Build and push Chocolatey package artifact.
         type: boolean
         required: true
+      publish_aur:
+        description: Publish a supplied PKGBUILD and .SRCINFO to the AUR.
+        type: boolean
+        default: false
+      aur_package_base:
+        description: AUR package base used as the Git repository name.
+        type: string
+        default: ''
+      aur_pkgbuild_path:
+        description: PKGBUILD path in the release assets.
+        type: string
+        default: ''
+      aur_srcinfo_path:
+        description: .SRCINFO path in the release assets.
+        type: string
+        default: ''
       publish_docker_hub:
         description: Build and publish Docker Hub images.
         type: boolean
@@ -208,6 +228,8 @@ on:
         required: false
       CHOCOLATEY_API_KEY:
         required: false
+      AUR_SSH_PRIVATE_KEY:
+        required: false
       DOCKERHUB_USERNAME:
         required: false
       DOCKERHUB_TOKEN:
@@ -227,15 +249,21 @@ jobs:
         env:
           PACKAGE_REPOSITORY_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
           CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           PUBLISH_HOMEBREW: ${{ inputs.publish_homebrew }}
           BREW_CASK_PATH: ${{ inputs.brew_cask_path }}
           BREW_CASK_TAP_REPO: ${{ inputs.brew_cask_tap_repo }}
           PUBLISH_SCOOP: ${{ inputs.publish_scoop }}
+          SCOOP_BUCKET_REPO: ${{ inputs.scoop_bucket_repo }}
           PUBLISH_WINGET: ${{ inputs.publish_winget }}
           PUBLISH_NIXPKGS: ${{ inputs.publish_nixpkgs }}
           PUBLISH_CHOCOLATEY: ${{ inputs.publish_chocolatey }}
+          PUBLISH_AUR: ${{ inputs.publish_aur }}
+          AUR_PACKAGE_BASE: ${{ inputs.aur_package_base }}
+          AUR_PKGBUILD_PATH: ${{ inputs.aur_pkgbuild_path }}
+          AUR_SRCINFO_PATH: ${{ inputs.aur_srcinfo_path }}
           PUBLISH_DOCKER_HUB: ${{ inputs.publish_docker_hub }}
         run: |
           set -euo pipefail
@@ -258,8 +286,21 @@ jobs:
             exit 1
           fi
 
+          if [[ "$PUBLISH_SCOOP" == true && -z "$SCOOP_BUCKET_REPO" ]]; then
+            echo '::error::scoop_bucket_repo is required to publish a supplied manifest.' >&2
+            exit 1
+          fi
+
           if [[ "$PUBLISH_CHOCOLATEY" == true ]]; then
             require_secret "$CHOCOLATEY_API_KEY" CHOCOLATEY_API_KEY
+          fi
+
+          if [[ "$PUBLISH_AUR" == true ]]; then
+            require_secret "$AUR_SSH_PRIVATE_KEY" AUR_SSH_PRIVATE_KEY
+            if [[ -z "$AUR_PACKAGE_BASE" || -z "$AUR_PKGBUILD_PATH" || -z "$AUR_SRCINFO_PATH" ]]; then
+              echo '::error::AUR publication needs a package base, PKGBUILD path, and .SRCINFO path.' >&2
+              exit 1
+            fi
           fi
 
           if [[ "$PUBLISH_DOCKER_HUB" == true ]]; then
@@ -306,7 +347,8 @@ jobs:
           inputs.publish_homebrew ||
           inputs.publish_scoop ||
           inputs.publish_winget ||
-          inputs.publish_chocolatey
+          inputs.publish_chocolatey ||
+          inputs.publish_aur
         )
       }}
     needs:
@@ -361,6 +403,8 @@ jobs:
       PUBLISH_HOMEBREW: ${{ inputs.publish_homebrew }}
       BREW_CASK_PATH: ${{ inputs.brew_cask_path }}
       PUBLISH_SCOOP: ${{ inputs.publish_scoop }}
+      SCOOP_MANIFEST_PATH: ${{ inputs.scoop_manifest_path }}
+      SCOOP_BUCKET_REPO: ${{ inputs.scoop_bucket_repo }}
       PUBLISH_WINGET: ${{ inputs.publish_winget }}
       WINGET_UPSTREAM_REPO: ${{ inputs.winget_upstream_repo }}
       WINGET_FORK_OWNER: ${{ inputs.winget_fork_owner }}
@@ -386,7 +430,7 @@ jobs:
           name: package-metadata-${{ inputs.version }}
           path: artifacts/package-metadata
       - name: Check out shared release workflow helpers
-        if: ${{ inputs.publish_winget || (inputs.publish_homebrew && inputs.brew_cask_path != '') }}
+        if: ${{ inputs.publish_scoop || inputs.publish_winget || (inputs.publish_homebrew && inputs.brew_cask_path != '') }}
         uses: actions/checkout@v7
         with:
           repository: alsi-lawr/package-release-workflows
@@ -423,9 +467,6 @@ jobs:
           if [ "$PUBLISH_HOMEBREW" = "true" ] && [ -z "$BREW_CASK_PATH" ]; then
             PUBLISH_ARGS+=(--packager brew)
           fi
-          if [ "$PUBLISH_SCOOP" = "true" ]; then
-            PUBLISH_ARGS+=(--packager scoop)
-          fi
           if [ "${#PUBLISH_ARGS[@]}" -eq 0 ]; then
             echo 'No JReleaser metadata targets enabled; skipping publication step.'
             exit 0
@@ -442,6 +483,16 @@ jobs:
             "${PUBLISH_ARGS[@]}" \
             --basedir /workspace \
             --config-file "$JRELEASER_CONFIG"
+      - name: Publish supplied manifest to the selected Scoop bucket
+        if: ${{ inputs.publish_scoop }}
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
+          MANIFEST_PATH: ${{ inputs.scoop_manifest_path }}
+          BUCKET_REPO: ${{ inputs.scoop_bucket_repo }}
+          PACKAGE_NAME: ${{ inputs.package_name }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/publish-supplied-scoop.sh"
       - name: Publish supplied Linux cask to the selected tap
         if: ${{ inputs.publish_homebrew && inputs.brew_cask_path != '' }}
         env:
@@ -588,6 +639,49 @@ jobs:
             --source https://push.chocolatey.org/ `
             --api-key $env:CHOCOLATEY_API_KEY
           Write-Host '::notice::Chocolatey upload completed; public availability remains pending moderation.'
+
+  publish-aur:
+    name: Publish the AUR package
+    if: ${{ always() && inputs.publish_aur && !failure() && !cancelled() }}
+    needs:
+      - package-tests
+      - validation
+      - credential-preflight
+      - github-release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v8
+        with:
+          name: release-assets-${{ inputs.version }}
+          path: artifacts/release
+      - name: Check out shared release workflow helpers
+        uses: actions/checkout@v7
+        with:
+          repository: alsi-lawr/package-release-workflows
+          ref: main
+          path: .shared-release-workflows
+          persist-credentials: false
+      - name: Publish the AUR package
+        env:
+          AUR_PACKAGE_BASE: ${{ inputs.aur_package_base }}
+          AUR_PKGBUILD: ${{ inputs.aur_pkgbuild_path }}
+          AUR_SRCINFO: ${{ inputs.aur_srcinfo_path }}
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          key="$RUNNER_TEMP/aur-key"
+          known_hosts="$RUNNER_TEMP/aur-known-hosts"
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > "$key"
+          chmod 600 "$key"
+          printf '%s\n' 'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' > "$known_hosts"
+          fingerprint=$(ssh-keygen -lf "$known_hosts" | awk '{ print $2 }')
+          test "$fingerprint" = 'SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4'
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts"
+          export AUR_REMOTE="ssh://aur@aur.archlinux.org/${AUR_PACKAGE_BASE}.git"
+          "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/publish-aur-package.sh"
 
   docker-hub-images:
     name: Publish Docker Hub ${{ matrix.kind }} ${{ matrix.arch }}
@@ -751,6 +845,7 @@ jobs:
       - publish-homebrew-scoop-winget
       - publish-nixpkgs
       - publish-chocolatey
+      - publish-aur
       - docker-hub-manifests
       - nix-manifests
     runs-on: ubuntu-latest

@@ -43,6 +43,10 @@ on:
         description: Full path to scoop manifest artifact.
         type: string
         required: true
+      scoop_bucket_repo:
+        description: Existing owner/repository Scoop bucket for the supplied manifest.
+        type: string
+        default: ''
       chocolatey_nuspec_path:
         description: Full path to chocolatey nuspec.
         type: string
@@ -79,6 +83,22 @@ on:
         description: Build and push Chocolatey package artifact.
         type: boolean
         required: true
+      publish_aur:
+        description: Publish a supplied PKGBUILD and .SRCINFO to the AUR.
+        type: boolean
+        default: false
+      aur_package_base:
+        description: AUR package base used as the Git repository name.
+        type: string
+        default: ''
+      aur_pkgbuild_path:
+        description: PKGBUILD path in the release assets.
+        type: string
+        default: ''
+      aur_srcinfo_path:
+        description: .SRCINFO path in the release assets.
+        type: string
+        default: ''
       publish_docker_hub:
         description: Build and publish Docker Hub images.
         type: boolean
@@ -214,6 +234,8 @@ on:
         required: false
       CHOCOLATEY_API_KEY:
         required: false
+      AUR_SSH_PRIVATE_KEY:
+        required: false
       DOCKERHUB_USERNAME:
         required: false
       DOCKERHUB_TOKEN:
@@ -278,6 +300,7 @@ jobs:
       smoke_script: ${{ inputs.smoke_script }}
       brew_formula_path: ${{ inputs.brew_formula_path }}
       scoop_manifest_path: ${{ inputs.scoop_manifest_path }}
+      scoop_bucket_repo: ${{ inputs.scoop_bucket_repo }}
       chocolatey_nuspec_path: ${{ inputs.chocolatey_nuspec_path }}
       winget_manifest_prefix: ${{ inputs.winget_manifest_prefix }}
       release_title_prefix: ${{ inputs.release_title_prefix }}
@@ -287,6 +310,10 @@ jobs:
       publish_winget: ${{ inputs.publish_winget }}
       publish_nixpkgs: ${{ inputs.publish_nixpkgs }}
       publish_chocolatey: ${{ inputs.publish_chocolatey }}
+      publish_aur: ${{ inputs.publish_aur }}
+      aur_package_base: ${{ inputs.aur_package_base }}
+      aur_pkgbuild_path: ${{ inputs.aur_pkgbuild_path }}
+      aur_srcinfo_path: ${{ inputs.aur_srcinfo_path }}
       publish_docker_hub: ${{ inputs.publish_docker_hub }}
       publish_nix_images: ${{ inputs.publish_nix_images }}
       promote_latest: ${{ inputs.promote_latest }}
@@ -316,5 +343,6 @@ jobs:
     secrets:
       PACKAGE_REPOSITORY_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
       CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
