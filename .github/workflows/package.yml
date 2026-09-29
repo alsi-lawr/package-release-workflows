@@ -168,9 +168,17 @@ jobs:
           dotnet-version: ${{ inputs.dotnet_version }}
       - name: Confirm the native runner architecture
         shell: pwsh
+        env:
+          EXPECTED_MACHINE: ${{ matrix.machine }}
         run: |
-          $actual = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
-          if ($actual -ne 'X64') { throw "Expected x64 runner, found $actual" }
+          $actual = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
+          $expected = $env:EXPECTED_MACHINE.ToLowerInvariant()
+          $normalized = switch ($expected) {
+            { $_ -in 'x64', 'x86_64', 'amd64' } { 'x64'; break }
+            { $_ -in 'arm64', 'aarch64' } { 'arm64'; break }
+            default { throw "Unsupported matrix machine: $expected" }
+          }
+          if ($actual -ne $normalized) { throw "Expected $expected ($normalized) runner, found $actual" }
       - name: Publish the caller-configured self-contained directory
         if: ${{ inputs.package_publish_script == '' }}
         shell: pwsh
