@@ -7,6 +7,26 @@ on:
         description: Command/binary name used for validation.
         type: string
         required: true
+      package_version:
+        description: Optional strict X.Y.Z version for non-tag qualification runs; tags remain authoritative by default.
+        type: string
+        required: false
+        default: ""
+      shared_helpers_ref:
+        description: Ref of this repository used for runtime helper scripts; defaults to main for existing callers.
+        type: string
+        required: false
+        default: main
+      source_archive_template:
+        description: Optional source tarball name with {package_name} and {version} placeholders.
+        type: string
+        required: false
+        default: ""
+      source_cargo_toolchain:
+        description: Optional Rust toolchain needed by the caller's source finalizer.
+        type: string
+        required: false
+        default: ""
       dotnet_version:
         description: .NET version to install.
         type: string
@@ -29,6 +49,11 @@ on:
         required: true
       package_publish_prepare_script:
         description: Optional Python script that prepares each RID publish directory before smoke validation.
+        type: string
+        required: false
+        default: ""
+      package_publish_script:
+        description: Optional Python script that builds a complete RID payload instead of dotnet publish.
         type: string
         required: false
         default: ""
@@ -68,6 +93,7 @@ jobs:
       revision: ${{ steps.version.outputs.revision }}
     env:
       JRELEASER_IMAGE: ${{ inputs.jreleaser_image }}
+      PACKAGE_VERSION_OVERRIDE: ${{ inputs.package_version }}
     steps:
       - name: Check out the release commit
         uses: actions/checkout@v7
@@ -79,12 +105,23 @@ jobs:
         id: version
         run: |
           tag="$GITHUB_REF_NAME"
-          if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-            echo "Tag is not strict vX.Y.Z: $tag" >&2
-            exit 1
+          if [ -n "$PACKAGE_VERSION_OVERRIDE" ]; then
+            version="$PACKAGE_VERSION_OVERRIDE"
+            if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+              echo "Version is not strict X.Y.Z: $version" >&2
+              exit 1
+            fi
+            if [ "$GITHUB_REF_TYPE" = tag ] && [ "$tag" != "v$version" ]; then
+              echo "Tag $tag differs from configured version v$version" >&2
+              exit 1
+            fi
+          else
+            if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+              echo "Tag is not strict vX.Y.Z: $tag" >&2
+              exit 1
+            fi
+            version="${tag#v}"
           fi
-          version="${tag#v}"
-          test "v$version" = "$tag"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "revision=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
       - name: Compare Nix package version
@@ -134,6 +171,7 @@ jobs:
         run: >-
           python -c "import platform, sys; actual = platform.machine().lower(); expected = '${{ matrix.machine }}'; print(f'runner architecture: {actual}'); sys.exit(0 if actual == expected else 1)"
       - name: Publish the caller-configured self-contained directory
+        if: ${{ inputs.package_publish_script == '' }}
         shell: pwsh
         run: >-
           dotnet publish "${{ inputs.dotnet_project_path }}"
@@ -146,6 +184,20 @@ jobs:
           -p:DebugSymbols=false
           -p:DebugType=None
           -p:PublishSingleFile=false
+      - name: Build the caller-configured complete payload
+        if: ${{ inputs.package_publish_script != '' }}
+        shell: pwsh
+        env:
+          PUBLISH_SCRIPT: ${{ inputs.package_publish_script }}
+          RID: ${{ matrix.rid }}
+          VERSION: ${{ needs.version.outputs.version }}
+          REVISION: ${{ needs.version.outputs.revision }}
+        run: >-
+          python "$env:PUBLISH_SCRIPT"
+          --rid "$env:RID"
+          --publish-directory "artifacts/publish/$env:RID"
+          --version "$env:VERSION"
+          --revision "$env:REVISION"
       - name: Prepare the RID publish directory
         if: ${{ inputs.package_publish_prepare_script != '' }}
         shell: pwsh
@@ -192,7 +244,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: alsi-lawr/package-release-workflows
-          ref: main
+          ref: ${{ inputs.shared_helpers_ref }}
           path: .shared-release-workflows
           persist-credentials: false
       - name: Download all publish directories
@@ -204,11 +256,11 @@ jobs:
       - name: Restore Unix command executable modes
         env:
           PACKAGE_NAME: ${{ inputs.package_name }}
+          PACKAGE_PUBLISH_MATRIX: ${{ inputs.package_publish_matrix }}
         run: |
-          chmod +x \
-            "artifacts/publish/linux-x64/$PACKAGE_NAME" \
-            "artifacts/publish/linux-arm64/$PACKAGE_NAME" \
-            "artifacts/publish/osx-arm64/$PACKAGE_NAME"
+          python3 "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/release-archives.py" \
+            restore --matrix "$PACKAGE_PUBLISH_MATRIX" --package-name "$PACKAGE_NAME" \
+            --root artifacts/publish
       - name: Assemble release archives
         run: |
           for phase in assemble; do
@@ -222,12 +274,20 @@ jobs:
               --config-file "$JRELEASER_CONFIG"
           done
       - name: Reuse verified immutable release archives on rerun
+        id: reuse
         env:
           GH_TOKEN: ${{ github.token }}
           PACKAGE_NAME: ${{ inputs.package_name }}
+          PACKAGE_PUBLISH_MATRIX: ${{ inputs.package_publish_matrix }}
           VERSION: ${{ needs.version.outputs.version }}
+          SOURCE_ARCHIVE_TEMPLATE: ${{ inputs.source_archive_template }}
         run: |
           "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/reuse-existing-release-assets.sh"
+      - name: Install source finalizer Rust toolchain
+        if: ${{ inputs.source_cargo_toolchain != '' }}
+        env:
+          SOURCE_CARGO_TOOLCHAIN: ${{ inputs.source_cargo_toolchain }}
+        run: rustup toolchain install "$SOURCE_CARGO_TOOLCHAIN" --profile minimal
       - name: Generate checksums and package metadata
         run: |
           for phase in checksum prepare; do
@@ -252,89 +312,24 @@ jobs:
             --release-directory artifacts/release \
             --metadata-directory out/jreleaser/prepare
           cp -R out/jreleaser/prepare/. artifacts/package-metadata/
-      - name: Verify five platform release archives
+      - name: Verify selected platform release archives
         env:
           PACKAGE_NAME: ${{ inputs.package_name }}
           PACKAGE_PUBLISH_MATRIX: ${{ inputs.package_publish_matrix }}
+          SOURCE_ARCHIVE_TEMPLATE: ${{ inputs.source_archive_template }}
+          VERSION: ${{ needs.version.outputs.version }}
+          REVISION: ${{ needs.version.outputs.revision }}
+          EXISTING_SOURCE_SHA256: ${{ steps.reuse.outputs.source_sha256 }}
         run: |
-          verification_root="$(mktemp -d)"
-          trap 'rm -rf "$verification_root"' EXIT
-
-          python3 - "artifacts/release" "$PACKAGE_PUBLISH_MATRIX" <<'PY'
-          import json
-          import sys
-          from pathlib import Path
-
-          release_directory = Path(sys.argv[1])
-          matrix = json.loads(sys.argv[2])
-          expected_formats = {
-              "linux-x64": "tar.gz",
-              "linux-arm64": "tar.gz",
-              "osx-arm64": "zip",
-              "win-x64": "zip",
-              "win-arm64": "zip",
-          }
-          rids = [entry.get("rid") for entry in matrix]
-          if set(rids) != set(expected_formats) or len(rids) != len(expected_formats):
-              raise SystemExit(
-                  "package_publish_matrix must contain exactly the five supported release RIDs: "
-                  + ", ".join(expected_formats)
-              )
-
-          archives = sorted(
-              path for path in release_directory.iterdir()
-              if path.is_file() and (path.name.endswith(".tar.gz") or path.suffix == ".zip")
-          )
-          if len(archives) != len(expected_formats):
-              raise SystemExit(f"expected {len(expected_formats)} release archives, found {len(archives)}")
-
-          for rid, extension in expected_formats.items():
-              matches = list(release_directory.glob(f"*-{rid}.{extension}"))
-              if len(matches) != 1:
-                  raise SystemExit(f"expected one {rid}.{extension} archive, found {len(matches)}")
-          PY
-
-          verify_archive() {
-            local rid="$1"
-            local format="$2"
-            local executable_name="$3"
-            local extract_dir="$verification_root/$rid"
-            local -a archives=()
-            local -a executables=()
-
-            mapfile -t archives < <(
-              find artifacts/release -maxdepth 1 -type f -name "*-${rid}.${format}" -print
-            )
-            if [ "${#archives[@]}" -ne 1 ]; then
-              echo "::error::Expected one ${rid} archive, found ${#archives[@]}." >&2
-              return 1
-            fi
-
-            mkdir -p "$extract_dir"
-            if [ "$format" = "tar.gz" ]; then
-              tar -xzf "${archives[0]}" -C "$extract_dir"
-            else
-              unzip -q "${archives[0]}" -d "$extract_dir"
-            fi
-
-            mapfile -t executables < <(
-              find "$extract_dir" -type f -path "*/bin/$executable_name" -print
-            )
-            if [ "${#executables[@]}" -ne 1 ]; then
-              echo "::error::Expected one bin/$executable_name in ${archives[0]}, found ${#executables[@]}." >&2
-              return 1
-            fi
-            if [ "$format" != zip ] && [ ! -x "${executables[0]}" ]; then
-              echo "::error::${executables[0]} is not executable in ${archives[0]}." >&2
-              return 1
-            fi
-          }
-
-          verify_archive linux-x64 tar.gz "$PACKAGE_NAME"
-          verify_archive linux-arm64 tar.gz "$PACKAGE_NAME"
-          verify_archive osx-arm64 zip "$PACKAGE_NAME"
-          verify_archive win-x64 zip "$PACKAGE_NAME.exe"
-          verify_archive win-arm64 zip "$PACKAGE_NAME.exe"
+          python3 "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/release-archives.py" \
+            verify --matrix "$PACKAGE_PUBLISH_MATRIX" --package-name "$PACKAGE_NAME" \
+            --root artifacts/release --source-archive-template "$SOURCE_ARCHIVE_TEMPLATE" \
+            --version "$VERSION" --revision "$REVISION"
+          if [ -n "$EXISTING_SOURCE_SHA256" ]; then
+            source_name="${SOURCE_ARCHIVE_TEMPLATE//\{package_name\}/$PACKAGE_NAME}"
+            source_name="${source_name//\{version\}/$VERSION}"
+            echo "$EXISTING_SOURCE_SHA256  artifacts/release/$source_name" | sha256sum --check
+          fi
       - name: Generate release asset provenance
         uses: actions/attest@v4
         with:
@@ -363,3 +358,39 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
+
+  verify-downloaded-source:
+    name: Verify downloaded source and release assets
+    if: ${{ inputs.source_archive_template != '' }}
+    needs:
+      - version
+      - release-assets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out shared release workflow helpers
+        uses: actions/checkout@v7
+        with:
+          repository: alsi-lawr/package-release-workflows
+          ref: ${{ inputs.shared_helpers_ref }}
+          path: .shared-release-workflows
+          persist-credentials: false
+      - name: Download release assets
+        uses: actions/download-artifact@v8
+        with:
+          name: release-assets-${{ needs.version.outputs.version }}
+          path: artifacts/release
+      - name: Verify downloaded assets and checksums
+        env:
+          PACKAGE_NAME: ${{ inputs.package_name }}
+          PACKAGE_PUBLISH_MATRIX: ${{ inputs.package_publish_matrix }}
+          SOURCE_ARCHIVE_TEMPLATE: ${{ inputs.source_archive_template }}
+          VERSION: ${{ needs.version.outputs.version }}
+          REVISION: ${{ needs.version.outputs.revision }}
+        run: |
+          python3 "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/release-archives.py" \
+            verify --matrix "$PACKAGE_PUBLISH_MATRIX" --package-name "$PACKAGE_NAME" \
+            --root artifacts/release --source-archive-template "$SOURCE_ARCHIVE_TEMPLATE" \
+            --version "$VERSION" --revision "$REVISION"
+          (cd artifacts/release && sha256sum --check checksums_sha256.txt)

@@ -19,6 +19,18 @@ on:
         description: Installed command used for smoke verification.
         type: string
         required: true
+      windows_executable_name:
+        description: Windows executable file name when it differs from the package command.
+        type: string
+        default: ''
+      winget_scope:
+        description: Requested WinGet installer scope.
+        type: string
+        default: machine
+      winget_uninstall_key:
+        description: HKCU uninstall key of an installed per-user WinGet package.
+        type: string
+        default: ''
       release_name:
         description: Human-friendly product title used for release titles.
         type: string
@@ -34,7 +46,19 @@ on:
       brew_formula_path:
         description: Full path to brew formula artifact.
         type: string
-        required: true
+        default: ''
+      brew_cask_path:
+        description: Optional supplied Linux cask in the release assets; selects it instead of the JReleaser formula.
+        type: string
+        default: ''
+      brew_cask_tap_repo:
+        description: Existing owner/repository tap for an explicitly published supplied cask.
+        type: string
+        default: ''
+      brew_cask_smoke_script:
+        description: Caller script that checks an installed Linux AppImage.
+        type: string
+        default: ''
       scoop_manifest_path:
         description: Full path to scoop manifest artifact.
         type: string
@@ -95,6 +119,10 @@ on:
         description: Run the Homebrew install-and-smoke job.
         type: boolean
         required: true
+      run_linux_cask_test:
+        description: Run the optional Linux cask install-and-smoke job.
+        type: boolean
+        default: false
       run_windows_packaging_tests:
         description: Run the Scoop and Chocolatey install-and-smoke job.
         type: boolean
@@ -202,6 +230,8 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           PUBLISH_HOMEBREW: ${{ inputs.publish_homebrew }}
+          BREW_CASK_PATH: ${{ inputs.brew_cask_path }}
+          BREW_CASK_TAP_REPO: ${{ inputs.brew_cask_tap_repo }}
           PUBLISH_SCOOP: ${{ inputs.publish_scoop }}
           PUBLISH_WINGET: ${{ inputs.publish_winget }}
           PUBLISH_NIXPKGS: ${{ inputs.publish_nixpkgs }}
@@ -221,6 +251,11 @@ jobs:
 
           if [[ "$PUBLISH_HOMEBREW" == true || "$PUBLISH_SCOOP" == true || "$PUBLISH_WINGET" == true || "$PUBLISH_NIXPKGS" == true ]]; then
             require_secret "$PACKAGE_REPOSITORY_TOKEN" PACKAGE_REPOSITORY_TOKEN
+          fi
+
+          if [[ "$PUBLISH_HOMEBREW" == true && -n "$BREW_CASK_PATH" && -z "$BREW_CASK_TAP_REPO" ]]; then
+            echo '::error::brew_cask_tap_repo is required to publish a supplied cask.' >&2
+            exit 1
           fi
 
           if [[ "$PUBLISH_CHOCOLATEY" == true ]]; then
@@ -243,12 +278,18 @@ jobs:
     with:
       version: ${{ inputs.version }}
       command_name: ${{ inputs.command_name }}
+      windows_executable_name: ${{ inputs.windows_executable_name }}
+      winget_scope: ${{ inputs.winget_scope }}
+      winget_uninstall_key: ${{ inputs.winget_uninstall_key }}
       smoke_script: ${{ inputs.smoke_script }}
       brew_formula_path: ${{ inputs.brew_formula_path }}
+      brew_cask_path: ${{ inputs.brew_cask_path }}
+      brew_cask_smoke_script: ${{ inputs.brew_cask_smoke_script }}
       scoop_manifest_path: ${{ inputs.scoop_manifest_path }}
       chocolatey_nuspec_path: ${{ inputs.chocolatey_nuspec_path }}
       winget_manifest_prefix: ${{ inputs.winget_manifest_prefix }}
       run_homebrew_test: ${{ inputs.run_homebrew_test }}
+      run_linux_cask_test: ${{ inputs.run_linux_cask_test }}
       run_windows_packaging_tests: ${{ inputs.run_windows_packaging_tests }}
       run_winget_test: ${{ inputs.run_winget_test }}
 
@@ -318,6 +359,7 @@ jobs:
       JRELEASER_PROJECT_VERSION: ${{ inputs.version }}
       JRELEASER_GITHUB_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
       PUBLISH_HOMEBREW: ${{ inputs.publish_homebrew }}
+      BREW_CASK_PATH: ${{ inputs.brew_cask_path }}
       PUBLISH_SCOOP: ${{ inputs.publish_scoop }}
       PUBLISH_WINGET: ${{ inputs.publish_winget }}
       WINGET_UPSTREAM_REPO: ${{ inputs.winget_upstream_repo }}
@@ -344,7 +386,7 @@ jobs:
           name: package-metadata-${{ inputs.version }}
           path: artifacts/package-metadata
       - name: Check out shared release workflow helpers
-        if: ${{ inputs.publish_winget }}
+        if: ${{ inputs.publish_winget || (inputs.publish_homebrew && inputs.brew_cask_path != '') }}
         uses: actions/checkout@v7
         with:
           repository: alsi-lawr/package-release-workflows
@@ -378,7 +420,7 @@ jobs:
             exit 1
           fi
           PUBLISH_ARGS=()
-          if [ "$PUBLISH_HOMEBREW" = "true" ]; then
+          if [ "$PUBLISH_HOMEBREW" = "true" ] && [ -z "$BREW_CASK_PATH" ]; then
             PUBLISH_ARGS+=(--packager brew)
           fi
           if [ "$PUBLISH_SCOOP" = "true" ]; then
@@ -400,6 +442,16 @@ jobs:
             "${PUBLISH_ARGS[@]}" \
             --basedir /workspace \
             --config-file "$JRELEASER_CONFIG"
+      - name: Publish supplied Linux cask to the selected tap
+        if: ${{ inputs.publish_homebrew && inputs.brew_cask_path != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
+          CASK_PATH: ${{ inputs.brew_cask_path }}
+          TAP_REPO: ${{ inputs.brew_cask_tap_repo }}
+          PACKAGE_NAME: ${{ inputs.package_name }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/publish-supplied-cask.sh"
       - name: Publish WinGet manifests to the prepared fork branch
         if: ${{ inputs.publish_winget }}
         env:

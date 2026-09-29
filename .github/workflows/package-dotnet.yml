@@ -11,6 +11,18 @@ on:
         description: Installed command used for smoke verification.
         type: string
         required: true
+      windows_executable_name:
+        description: Windows executable file name when it differs from the package command.
+        type: string
+        default: ''
+      winget_scope:
+        description: Requested WinGet installer scope.
+        type: string
+        default: machine
+      winget_uninstall_key:
+        description: HKCU uninstall key of an installed per-user WinGet package.
+        type: string
+        default: ''
       release_name:
         description: Human-friendly product title used for release titles.
         type: string
@@ -184,6 +196,11 @@ on:
         type: string
         required: false
         default: ""
+      package_publish_script:
+        description: Optional Python script that builds a complete RID payload instead of dotnet publish.
+        type: string
+        required: false
+        default: ""
       package_smoke_script:
         description: Smoke script to validate the published binary.
         type: string
@@ -233,6 +250,7 @@ jobs:
       dotnet_project_path: ${{ inputs.dotnet_project_path }}
       package_smoke_script: ${{ inputs.package_smoke_script }}
       package_publish_prepare_script: ${{ inputs.package_publish_prepare_script }}
+      package_publish_script: ${{ inputs.package_publish_script }}
       package_metadata_finalize_script: ${{ inputs.package_metadata_finalize_script }}
       package_publish_matrix: ${{ inputs.package_publish_matrix }}
       jreleaser_image: ${{ inputs.jreleaser_image }}
@@ -253,6 +271,9 @@ jobs:
       revision: ${{ needs.package.outputs.revision }}
       package_name: ${{ inputs.package_name }}
       command_name: ${{ inputs.command_name }}
+      windows_executable_name: ${{ inputs.windows_executable_name }}
+      winget_scope: ${{ inputs.winget_scope }}
+      winget_uninstall_key: ${{ inputs.winget_uninstall_key }}
       release_name: ${{ inputs.release_name }}
       smoke_script: ${{ inputs.smoke_script }}
       brew_formula_path: ${{ inputs.brew_formula_path }}
