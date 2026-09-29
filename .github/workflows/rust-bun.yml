@@ -32,10 +32,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-          targets: ${{ matrix.target }}
+      - name: Install Rust target and components
+        shell: bash
+        run: rustup toolchain install stable --profile minimal --component clippy rustfmt --target "${{ matrix.target }}"
       - name: Run caller CI
         shell: bash
         env:

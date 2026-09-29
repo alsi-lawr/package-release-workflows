@@ -34,12 +34,16 @@ implying support for the unselected targets. Linux archives are `.tar.gz` and
 macOS/Windows archives are `.zip`. Existing five-RID callers retain that matrix.
 
 Project publish properties, including trimming and Native AOT, are owned by the
-caller. An optional `package_publish_prepare_script` runs after each RID publish
-as `python SCRIPT --rid RID --publish-directory DIRECTORY`, before smoke
-validation. An optional `package_publish_script` replaces the bare `dotnet publish`
-step with `python SCRIPT --rid RID --publish-directory DIRECTORY --version VERSION
---revision REVISION`; it must assemble the complete native payload in that
-directory. Matrix entries may set `publish_executable` (relative to that directory)
+caller. The optional `package_publish_prepare_script`, `package_publish_script`,
+and required `package_smoke_script` inputs are platform script base paths.
+The package workflow adds `.sh` on Unix and `.ps1` on Windows. The publish
+script receives the RID, publish directory, version, and revision. The prepare
+script receives the RID and publish directory. The smoke script receives the
+executable path and version. The optional publish script replaces the bare
+`dotnet publish` step and must assemble the complete native payload in that
+directory. The `package_metadata_finalize_script` input is a Bash script
+that receives the version, release directory, and metadata directory. Matrix
+entries may set `publish_executable` (relative to the publish directory)
 and `archive_executable` (relative to the archive root) when the product launcher
 is not the default root `package_name` / `bin/package_name` path. These hooks
 may also set `publish_executables` to relative paths of additional Unix payload

@@ -6,7 +6,6 @@ $executableName = if ($env:WINDOWS_EXECUTABLE_NAME) { $env:WINDOWS_EXECUTABLE_NA
 $scope = if ($env:WINGET_SCOPE) { $env:WINGET_SCOPE } else { 'machine' }
 $smokeScript = Join-Path $env:GITHUB_WORKSPACE $env:SMOKE_SCRIPT
 $manifestDirectory = Join-Path $env:GITHUB_WORKSPACE ($env:WINGET_MANIFEST_PREFIX + '/' + $version)
-$python = (Get-Command python -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
 
 $installerManifest = @(Get-ChildItem $manifestDirectory -Filter '*.installer.yaml')
 if ($installerManifest.Count -ne 1) { throw 'Expected exactly one WinGet installer manifest.' }
@@ -48,5 +47,5 @@ if ($env:WINGET_UNINSTALL_KEY) {
   $installedExecutable = Join-Path $packagePaths[0] $executableName
 }
 if (-not (Test-Path $installedExecutable)) { throw 'WinGet installed executable was not found.' }
-& $python $smokeScript $installedExecutable --version $version
-if ($LASTEXITCODE -ne 0) { throw 'WinGet installed-product smoke failed.' }
+& $smokeScript $installedExecutable -Version $version
+if (-not $?) { throw 'WinGet installed-product smoke failed.' }

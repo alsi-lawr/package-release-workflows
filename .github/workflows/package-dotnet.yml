@@ -192,21 +192,21 @@ on:
         type: string
         required: true
       package_publish_prepare_script:
-        description: Optional Python script that prepares each RID publish directory before smoke validation.
+        description: Optional platform script base path that prepares each RID publish directory.
         type: string
         required: false
         default: ""
       package_publish_script:
-        description: Optional Python script that builds a complete RID payload instead of dotnet publish.
+        description: Optional platform script base path that builds a complete RID payload.
         type: string
         required: false
         default: ""
       package_smoke_script:
-        description: Smoke script to validate the published binary.
+        description: Platform script base path that validates the published binary.
         type: string
         required: true
       package_metadata_finalize_script:
-        description: Script that finalizes caller-specific package metadata.
+        description: Bash script that finalizes caller-specific package metadata.
         type: string
         required: true
     secrets:
