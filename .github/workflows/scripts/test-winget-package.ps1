@@ -11,7 +11,7 @@ $manifestDirectory = Join-Path $env:GITHUB_WORKSPACE ($env:WINGET_MANIFEST_PREFI
 $installerManifest = @(Get-ChildItem $manifestDirectory -Filter '*.installer.yaml')
 if ($installerManifest.Count -ne 1) { throw 'Expected exactly one WinGet installer manifest.' }
 $manifestLines = @(Get-Content $installerManifest[0].FullName)
-$installerType = @($manifestLines | ForEach-Object { if ($_ -match '^InstallerType:\s*(\S+)') { $Matches[1] } })
+$installerType = @($manifestLines | ForEach-Object { if ($_ -match '^\s*InstallerType:\s*(\S+)') { $Matches[1] } } | Select-Object -Unique)
 if ($installerType.Count -ne 1) { throw 'Expected one WinGet installer type.' }
 if ($installerType[0] -eq 'zip' -and -not ($manifestLines -contains '    ArchiveBinariesDependOnPath: true')) {
   throw 'WinGet archive manifest must enable ArchiveBinariesDependOnPath.'
