@@ -427,7 +427,7 @@ jobs:
           name: release-assets-${{ inputs.version }}
           path: artifacts/release
       - name: Download prepared package metadata
-        if: ${{ inputs.publish_winget }}
+        if: ${{ inputs.publish_scoop || inputs.publish_winget }}
         uses: actions/download-artifact@v8
         with:
           name: package-metadata-${{ inputs.version }}
