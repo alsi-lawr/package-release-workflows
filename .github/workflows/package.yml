@@ -38,7 +38,7 @@ on:
       package_smoke_script:
         description: Platform script base path to validate the published binary (.sh or .ps1).
         type: string
-        required: true
+        default: ''
       package_metadata_finalize_script:
         description: Bash script that finalizes caller-specific package metadata.
         type: string
