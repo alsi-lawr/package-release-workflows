@@ -58,6 +58,15 @@ Unix checks use `.sh`, and its Windows checks use `.ps1`. The optional
 `brew_cask_smoke_script` takes a Linux `.sh` base path. The
 `container_smoke_script` names a Bash script with its extension.
 
+Caller-provided release smokes run by default. To waive them, set the caller
+repository's GitHub Actions configuration variable `RUN_RELEASE_SMOKES` to
+`false`. This skips only the native-publish, installed-package (Homebrew,
+Linux cask, Scoop, Chocolatey, and WinGet), and Nix-container smoke-script
+invocations. Builds, package installation, executable discovery, checksums,
+metadata and manifest validation, container load/tag/push, and existing
+uninstall checks still run. Skipped smoke hooks are waived, not validated;
+unset the variable or set a value other than `false` to enable them again.
+
 Tagged releases prepare and push the exact versioned WinGet and nixpkgs fork
 branches, but never open upstream pull requests. Callers use the separate
 submit-upstream-prs.yml reusable workflow from a thin workflow_dispatch caller

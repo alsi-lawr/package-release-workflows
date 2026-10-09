@@ -9,4 +9,10 @@ tap_directory="$(brew --repository "$tap")"
 cp "$formula" "$tap_directory/Formula/$formula_name.rb"
 
 brew install --formula "$tap/$formula_name"
-bash "$GITHUB_WORKSPACE/$SMOKE_SCRIPT.sh" "$(command -v "$COMMAND_NAME")" --version "$VERSION"
+installed="$(command -v "$COMMAND_NAME")"
+test -x "$installed"
+if [[ "${RUN_RELEASE_SMOKES:-true}" != false ]]; then
+  bash "$GITHUB_WORKSPACE/$SMOKE_SCRIPT.sh" "$installed" --version "$VERSION"
+else
+  echo '::notice::Caller Homebrew installed-package smoke skipped: RUN_RELEASE_SMOKES=false.'
+fi

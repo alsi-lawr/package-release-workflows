@@ -82,6 +82,9 @@ permissions:
   attestations: write
   id-token: write
 
+env:
+  RUN_RELEASE_SMOKES: ${{ vars.RUN_RELEASE_SMOKES != 'false' }}
+
 jobs:
   version:
     name: Validate and compare the release version
@@ -223,6 +226,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
       - name: Run the caller publish smoke
+        if: ${{ env.RUN_RELEASE_SMOKES == 'true' }}
         shell: pwsh
         env:
           SMOKE_SCRIPT: ${{ inputs.package_smoke_script }}

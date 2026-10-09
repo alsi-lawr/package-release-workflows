@@ -235,6 +235,9 @@ on:
       DOCKERHUB_TOKEN:
         required: false
 
+env:
+  RUN_RELEASE_SMOKES: ${{ vars.RUN_RELEASE_SMOKES != 'false' }}
+
 jobs:
   validation:
     uses: alsi-lawr/package-release-workflows/.github/workflows/validation.yml@main
@@ -770,7 +773,7 @@ jobs:
         uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: experimental-features = nix-command flakes
-      - name: Build and smoke the Nix image
+      - name: Build, optionally smoke, and tag the Nix image
         env:
           PACKAGE_VERSION: ${{ inputs.version }}
           VERSION: ${{ inputs.version }}
@@ -784,11 +787,15 @@ jobs:
         run: |
           nix build --impure ".#$OUTPUT" --out-link result-image
           loaded=$(docker load < result-image | sed -n 's/^Loaded image: //p' | tail -n 1)
-          bash "$CONTAINER_SMOKE_SCRIPT" \
-            --image "$loaded" \
-            --kind "$SMOKE_KIND" \
-            --version "$VERSION" \
-            --revision "$REVISION"
+          if [[ "$RUN_RELEASE_SMOKES" == true ]]; then
+            bash "$CONTAINER_SMOKE_SCRIPT" \
+              --image "$loaded" \
+              --kind "$SMOKE_KIND" \
+              --version "$VERSION" \
+              --revision "$REVISION"
+          else
+            echo '::notice::Caller Nix-container smoke skipped: RUN_RELEASE_SMOKES=false.'
+          fi
           docker tag "$loaded" "${IMAGE}:${VERSION}-${ARCH}"
       - name: Log in to GHCR
         env:

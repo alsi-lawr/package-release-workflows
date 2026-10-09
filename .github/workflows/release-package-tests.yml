@@ -71,6 +71,9 @@ on:
 permissions:
   contents: read
 
+env:
+  RUN_RELEASE_SMOKES: ${{ vars.RUN_RELEASE_SMOKES != 'false' }}
+
 jobs:
   package-homebrew-test:
     if: ${{ inputs.run_homebrew_test }}

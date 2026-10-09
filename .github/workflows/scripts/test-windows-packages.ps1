@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $version = $env:VERSION
+$runReleaseSmokes = $env:RUN_RELEASE_SMOKES -ne 'false'
 $commandName = $env:COMMAND_NAME
 $executableName = if ($env:WINDOWS_EXECUTABLE_NAME) { $env:WINDOWS_EXECUTABLE_NAME } else { "$commandName.exe" }
 $smokeScript = Join-Path $env:GITHUB_WORKSPACE "$($env:SMOKE_SCRIPT).ps1"
@@ -21,8 +22,12 @@ $scoopRoot = (scoop prefix $commandName | Select-Object -Last 1).Trim()
 $scoopExecutable = Get-ChildItem $scoopRoot -Filter $executableName -Recurse |
   Select-Object -First 1 -ExpandProperty FullName
 if (-not $scoopExecutable) { throw 'Scoop installed executable was not found.' }
-& $smokeScript $scoopExecutable -Version $version
-if (-not $?) { throw 'Scoop installed-product smoke failed.' }
+if ($runReleaseSmokes) {
+  & $smokeScript $scoopExecutable -Version $version
+  if (-not $?) { throw 'Scoop installed-product smoke failed.' }
+} else {
+  Write-Host '::notice::Caller Scoop installed-package smoke skipped: RUN_RELEASE_SMOKES=false.'
+}
 
 New-Item -ItemType Directory -Force artifacts/chocolatey | Out-Null
 choco pack $chocolateyNuspec --output-directory artifacts/chocolatey
@@ -35,5 +40,9 @@ $packageRoot = Join-Path $env:ChocolateyInstall "lib\$commandName"
 $installedExecutable = Get-ChildItem $packageRoot -Filter $executableName -Recurse |
   Select-Object -First 1 -ExpandProperty FullName
 if (-not $installedExecutable) { throw 'Chocolatey installed executable was not found.' }
-& $smokeScript $installedExecutable -Version $version
-if (-not $?) { throw 'Chocolatey installed-product smoke failed.' }
+if ($runReleaseSmokes) {
+  & $smokeScript $installedExecutable -Version $version
+  if (-not $?) { throw 'Chocolatey installed-product smoke failed.' }
+} else {
+  Write-Host '::notice::Caller Chocolatey installed-package smoke skipped: RUN_RELEASE_SMOKES=false.'
+}
