@@ -5,7 +5,6 @@ set -euo pipefail
 : "${GITHUB_REPOSITORY:?Missing GITHUB_REPOSITORY}"
 : "${RUNNER_TEMP:?Missing RUNNER_TEMP}"
 : "${VERSION:?Missing VERSION}"
-: "${RELEASE_TITLE_PREFIX:?Missing RELEASE_TITLE_PREFIX}"
 : "${PUBLISH_GITHUB_RELEASE:?Missing PUBLISH_GITHUB_RELEASE}"
 
 assets_directory="${RELEASE_ASSETS_DIRECTORY:-artifacts/release}"
@@ -57,6 +56,8 @@ if [ "$PUBLISH_GITHUB_RELEASE" != true ]; then
   echo "::error::Release $tag does not exist and publish_github_release is disabled." >&2
   exit 1
 fi
+
+: "${RELEASE_TITLE_PREFIX:?Missing RELEASE_TITLE_PREFIX}"
 
 gh release create "$tag" "${assembled_assets[@]}" \
   --repo "$GITHUB_REPOSITORY" \
