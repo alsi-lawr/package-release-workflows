@@ -18,7 +18,7 @@ on:
       command_name:
         description: Installed command used for smoke verification.
         type: string
-        required: true
+        default: ''
       windows_executable_name:
         description: Windows executable file name when it differs from the package command.
         type: string
@@ -34,15 +34,15 @@ on:
       release_name:
         description: Human-friendly product title used for release titles.
         type: string
-        required: true
+        default: ''
       container_smoke_script:
         description: Script used to validate GHCR images.
         type: string
-        required: true
+        default: ''
       smoke_script:
         description: Repository-local installed-product smoke script base path (.sh on Unix, .ps1 on Windows).
         type: string
-        required: true
+        default: ''
       brew_formula_path:
         description: Full path to brew formula artifact.
         type: string
@@ -62,47 +62,47 @@ on:
       scoop_manifest_path:
         description: Full path to scoop manifest artifact.
         type: string
-        required: true
+        default: ''
       scoop_bucket_repo:
-        description: Existing owner/repository Scoop bucket for the supplied manifest.
+        description: Existing owner/repository Scoop bucket; falls back to the caller repository variable SCOOP_BUCKET_REPO.
         type: string
         default: ''
       chocolatey_nuspec_path:
         description: Full path to chocolatey nuspec.
         type: string
-        required: true
+        default: ''
       winget_manifest_prefix:
         description: Path prefix to winget manifests (version appended automatically).
         type: string
-        required: true
+        default: ''
       release_title_prefix:
         description: Release title prefix used for GitHub release titles.
         type: string
-        required: true
+        default: ''
       publish_github_release:
         description: Create GitHub release.
         type: boolean
-        required: true
+        default: false
       publish_homebrew:
         description: Publish via JReleaser Homebrew packager.
         type: boolean
-        required: true
+        default: false
       publish_scoop:
         description: Publish via JReleaser Scoop packager.
         type: boolean
-        required: true
+        default: false
       publish_winget:
         description: Publish via JReleaser Winget for a manual upstream PR.
         type: boolean
-        required: true
+        default: false
       publish_nixpkgs:
         description: Push nixpkgs update for a manual upstream PR.
         type: boolean
-        required: true
+        default: false
       publish_chocolatey:
         description: Build and push Chocolatey package artifact.
         type: boolean
-        required: true
+        default: false
       publish_aur:
         description: Publish a supplied PKGBUILD and .SRCINFO to the AUR.
         type: boolean
@@ -122,23 +122,23 @@ on:
       publish_docker_hub:
         description: Build and publish Docker Hub images.
         type: boolean
-        required: true
+        default: false
       publish_nix_images:
         description: Build and publish GHCR images.
         type: boolean
-        required: true
+        default: false
       promote_latest:
         description: Promote version tags to :latest on Docker Hub and GHCR.
         type: boolean
-        required: true
+        default: false
       run_package_tests:
         description: Execute optional package installation and installed-product smoke checks via separate workflow.
         type: boolean
-        required: true
+        default: false
       run_homebrew_test:
         description: Run the Homebrew install-and-smoke job.
         type: boolean
-        required: true
+        default: false
       run_linux_cask_test:
         description: Run the optional Linux cask install-and-smoke job.
         type: boolean
@@ -146,83 +146,83 @@ on:
       run_windows_packaging_tests:
         description: Run the Scoop and Chocolatey install-and-smoke job.
         type: boolean
-        required: true
+        default: false
       run_winget_test:
         description: Run the WinGet manifest validation and install-and-smoke job.
         type: boolean
-        required: true
+        default: false
       jreleaser_image:
         description: JReleaser container image.
         type: string
-        required: true
+        default: ''
       jreleaser_config:
         description: Path to JReleaser config file.
         type: string
-        required: true
+        default: ''
       winget_upstream_repo:
         description: Upstream repository for WinGet PRs.
         type: string
-        required: true
+        default: ''
       winget_fork_owner:
         description: Fork owner for WinGet branch creation.
         type: string
-        required: true
+        default: ''
       winget_fork_repo:
         description: Fork repository for WinGet branch creation.
         type: string
-        required: true
+        default: ''
       winget_branch_prefix:
         description: Reusable branch prefix for winget updates.
         type: string
-        required: true
+        default: ''
       nix_upstream_repo:
         description: Upstream repository for Nixpkgs PRs.
         type: string
-        required: true
+        default: ''
       nix_fork_owner:
         description: Fork owner for Nix updates.
         type: string
-        required: true
+        default: ''
       nix_fork_repo:
         description: Fork repository for Nix updates.
         type: string
-        required: true
+        default: ''
       nix_branch_prefix:
         description: Reusable branch prefix for nix updates.
         type: string
-        required: true
+        default: ''
       nix_package_name:
         description: Nix package attribute name to update.
         type: string
-        required: true
+        default: ''
       nix_package_template_path:
         description: Caller-relative Nixpkgs package template used for first publication.
         type: string
-        required: true
+        default: ''
       nix_package_dependencies_path:
         description: Caller-relative Nix dependency file copied for first publication.
         type: string
-        required: true
+        default: ''
       docker_build_matrix:
         description: JSON list for Docker Hub image build jobs.
         type: string
-        required: true
+        default: ''
       docker_manifest_images:
         description: JSON array of Docker Hub images for architecture manifest creation.
         type: string
-        required: true
+        default: ''
       ghcr_build_matrix:
         description: JSON list for GHCR image build jobs.
         type: string
-        required: true
+        default: ''
       ghcr_manifest_images:
         description: JSON array of GHCR images for architecture manifest creation.
         type: string
-        required: true
+        default: ''
       promotion_image_matrix:
         description: JSON array of images to promote as :latest.
         type: string
-        required: true
+        default: ''
     secrets:
       PACKAGE_REPOSITORY_TOKEN:
         required: false
@@ -234,6 +234,9 @@ on:
         required: false
       DOCKERHUB_TOKEN:
         required: false
+
+env:
+  RUN_RELEASE_SMOKES: ${{ vars.RUN_RELEASE_SMOKES != 'false' }}
 
 jobs:
   validation:
@@ -256,7 +259,7 @@ jobs:
           BREW_CASK_PATH: ${{ inputs.brew_cask_path }}
           BREW_CASK_TAP_REPO: ${{ inputs.brew_cask_tap_repo }}
           PUBLISH_SCOOP: ${{ inputs.publish_scoop }}
-          SCOOP_BUCKET_REPO: ${{ inputs.scoop_bucket_repo }}
+          SCOOP_BUCKET_REPO: ${{ inputs.scoop_bucket_repo || vars.SCOOP_BUCKET_REPO }}
           PUBLISH_WINGET: ${{ inputs.publish_winget }}
           PUBLISH_NIXPKGS: ${{ inputs.publish_nixpkgs }}
           PUBLISH_CHOCOLATEY: ${{ inputs.publish_chocolatey }}
@@ -404,7 +407,7 @@ jobs:
       BREW_CASK_PATH: ${{ inputs.brew_cask_path }}
       PUBLISH_SCOOP: ${{ inputs.publish_scoop }}
       SCOOP_MANIFEST_PATH: ${{ inputs.scoop_manifest_path }}
-      SCOOP_BUCKET_REPO: ${{ inputs.scoop_bucket_repo }}
+      SCOOP_BUCKET_REPO: ${{ inputs.scoop_bucket_repo || vars.SCOOP_BUCKET_REPO }}
       PUBLISH_WINGET: ${{ inputs.publish_winget }}
       WINGET_UPSTREAM_REPO: ${{ inputs.winget_upstream_repo }}
       WINGET_FORK_OWNER: ${{ inputs.winget_fork_owner }}
@@ -488,7 +491,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
           MANIFEST_PATH: ${{ inputs.scoop_manifest_path }}
-          BUCKET_REPO: ${{ inputs.scoop_bucket_repo }}
+          BUCKET_REPO: ${{ inputs.scoop_bucket_repo || vars.SCOOP_BUCKET_REPO }}
           PACKAGE_NAME: ${{ inputs.package_name }}
           VERSION: ${{ inputs.version }}
         run: |
@@ -770,7 +773,7 @@ jobs:
         uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: experimental-features = nix-command flakes
-      - name: Build and smoke the Nix image
+      - name: Build, optionally smoke, and tag the Nix image
         env:
           PACKAGE_VERSION: ${{ inputs.version }}
           VERSION: ${{ inputs.version }}
@@ -784,11 +787,15 @@ jobs:
         run: |
           nix build --impure ".#$OUTPUT" --out-link result-image
           loaded=$(docker load < result-image | sed -n 's/^Loaded image: //p' | tail -n 1)
-          bash "$CONTAINER_SMOKE_SCRIPT" \
-            --image "$loaded" \
-            --kind "$SMOKE_KIND" \
-            --version "$VERSION" \
-            --revision "$REVISION"
+          if [[ "$RUN_RELEASE_SMOKES" == true ]]; then
+            bash "$CONTAINER_SMOKE_SCRIPT" \
+              --image "$loaded" \
+              --kind "$SMOKE_KIND" \
+              --version "$VERSION" \
+              --revision "$REVISION"
+          else
+            echo '::notice::Caller Nix-container smoke skipped: RUN_RELEASE_SMOKES=false.'
+          fi
           docker tag "$loaded" "${IMAGE}:${VERSION}-${ARCH}"
       - name: Log in to GHCR
         env:

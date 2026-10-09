@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $version = $env:VERSION
+$runReleaseSmokes = $env:RUN_RELEASE_SMOKES -ne 'false'
 $commandName = $env:COMMAND_NAME
 $executableName = if ($env:WINDOWS_EXECUTABLE_NAME) { $env:WINDOWS_EXECUTABLE_NAME } else { "$commandName.exe" }
 $scope = if ($env:WINGET_SCOPE) { $env:WINGET_SCOPE } else { 'machine' }
@@ -47,5 +48,9 @@ if ($env:WINGET_UNINSTALL_KEY) {
   $installedExecutable = Join-Path $packagePaths[0] $executableName
 }
 if (-not (Test-Path $installedExecutable)) { throw 'WinGet installed executable was not found.' }
-& $smokeScript $installedExecutable -Version $version
-if (-not $?) { throw 'WinGet installed-product smoke failed.' }
+if ($runReleaseSmokes) {
+  & $smokeScript $installedExecutable -Version $version
+  if (-not $?) { throw 'WinGet installed-product smoke failed.' }
+} else {
+  Write-Host '::notice::Caller WinGet installed-package smoke skipped: RUN_RELEASE_SMOKES=false.'
+}

@@ -10,7 +10,7 @@ on:
       command_name:
         description: Installed executable to validate.
         type: string
-        required: true
+        default: ''
       windows_executable_name:
         description: Windows executable file name when it differs from the package command.
         type: string
@@ -26,7 +26,7 @@ on:
       smoke_script:
         description: Repository-local installed-product smoke script base path (.sh on Unix, .ps1 on Windows).
         type: string
-        required: true
+        default: ''
       brew_formula_path:
         description: Full path to the Homebrew formula artifact.
         type: string
@@ -42,19 +42,19 @@ on:
       scoop_manifest_path:
         description: Full path to Scoop manifest artifact.
         type: string
-        required: true
+        default: ''
       chocolatey_nuspec_path:
         description: Full path to Chocolatey nuspec.
         type: string
-        required: true
+        default: ''
       winget_manifest_prefix:
         description: Prefix for WinGet manifests under artifacts package metadata.
         type: string
-        required: true
+        default: ''
       run_homebrew_test:
         description: Enable the Homebrew install-and-smoke job.
         type: boolean
-        required: true
+        default: false
       run_linux_cask_test:
         description: Enable the Linux cask install-and-smoke job.
         type: boolean
@@ -62,14 +62,17 @@ on:
       run_windows_packaging_tests:
         description: Enable the Scoop and Chocolatey install-and-smoke job.
         type: boolean
-        required: true
+        default: false
       run_winget_test:
         description: Enable the WinGet manifest validation and install-and-smoke job.
         type: boolean
-        required: true
+        default: false
 
 permissions:
   contents: read
+
+env:
+  RUN_RELEASE_SMOKES: ${{ vars.RUN_RELEASE_SMOKES != 'false' }}
 
 jobs:
   package-homebrew-test:

@@ -34,8 +34,8 @@ implying support for the unselected targets. Linux archives are `.tar.gz` and
 macOS/Windows archives are `.zip`. Existing five-RID callers retain that matrix.
 
 Project publish properties, including trimming and Native AOT, are owned by the
-caller. The optional `package_publish_prepare_script`, `package_publish_script`,
-and required `package_smoke_script` inputs are platform script base paths.
+caller. The `package_publish_prepare_script`, `package_publish_script`,
+and `package_smoke_script` inputs are optional platform script base paths.
 The package workflow adds `.sh` on Unix and `.ps1` on Windows. The publish
 script receives the RID, publish directory, version, and revision. The prepare
 script receives the RID and publish directory. The smoke script receives the
@@ -58,7 +58,28 @@ Unix checks use `.sh`, and its Windows checks use `.ps1`. The optional
 `brew_cask_smoke_script` takes a Linux `.sh` base path. The
 `container_smoke_script` names a Bash script with its extension.
 
-Tagged releases prepare and push the exact versioned WinGet and nixpkgs fork
+Caller-provided smoke hooks run by default in enabled release stages. To waive them, set the caller
+repository's GitHub Actions configuration variable `RUN_RELEASE_SMOKES` to
+`false`. This skips only the native-publish, installed-package (Homebrew,
+Linux cask, Scoop, Chocolatey, and WinGet), and Nix-container smoke-script
+invocations. Builds, package installation, executable discovery, checksums,
+metadata and manifest validation, container load/tag/push, and existing
+uninstall checks still run. Skipped smoke hooks are waived, not validated;
+unset the variable or set a value other than `false` to enable them again.
+Smoke-script paths may be omitted when their hook is disabled or waived;
+enabled hooks still require a valid caller script.
+
+Publication channels are opt-in: each `publish_*` input defaults to `false`,
+as do `promote_latest` and the independent package-install test inputs.
+Destination-specific paths, repositories, and image matrices may be omitted
+when their channel or test is disabled. An enabled channel still needs its
+configuration and credentials; the existing preflight and tooling failures
+remain in force. Core build/version/metadata inputs remain required.
+For Scoop, `scoop_bucket_repo` takes precedence over the caller repository's
+`SCOOP_BUCKET_REPO` Actions configuration variable. Setting a destination or
+credential alone never enables publication.
+
+When selected, tagged releases prepare and push the exact versioned WinGet and nixpkgs fork
 branches, but never open upstream pull requests. Callers use the separate
 submit-upstream-prs.yml reusable workflow from a thin workflow_dispatch caller
 to submit either prepared branch after it verifies a matching non-draft GitHub
