@@ -1,8 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+: "${VERSION:?Missing VERSION}"
+
+# shellcheck source=.github/workflows/scripts/release-version.sh
+source "$(dirname "${BASH_SOURCE[0]}")/release-version.sh"
+# shellcheck source=.github/workflows/scripts/candidate-release-metadata.sh
+source "$(dirname "${BASH_SOURCE[0]}")/candidate-release-metadata.sh"
+kind="$(release_version_kind "$VERSION")"
 tag="v$VERSION"
-if ! gh release view "$tag" >/dev/null 2>&1; then
+if [[ "$kind" == candidate ]]; then
+  result=0
+  candidate_release_metadata "$tag" "$RUNNER_TEMP/reuse-release-metadata.json" || result=$?
+  if [[ "$result" == 4 ]]; then
+    exit 0
+  elif [[ "$result" != 0 ]]; then
+    exit 1
+  fi
+elif ! gh release view "$tag" >/dev/null 2>&1; then
   exit 0
 fi
 

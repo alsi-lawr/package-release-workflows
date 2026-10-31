@@ -8,7 +8,7 @@ on:
         type: string
         required: true
       package_version:
-        description: Optional strict X.Y.Z version for non-tag qualification runs; tags remain authoritative by default.
+        description: Optional X.Y.Z or X.Y.Z-rc.N version for non-tag qualification runs; tags remain authoritative by default.
         type: string
         required: false
         default: ""
@@ -104,29 +104,16 @@ jobs:
         uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: experimental-features = nix-command flakes
-      - name: Derive one strict X.Y.Z version
+      - name: Check out shared release workflow helpers
+        uses: actions/checkout@v7
+        with:
+          repository: alsi-lawr/package-release-workflows
+          ref: ${{ inputs.shared_helpers_ref }}
+          path: .shared-release-workflows
+          persist-credentials: false
+      - name: Derive one release version
         id: version
-        run: |
-          tag="$GITHUB_REF_NAME"
-          if [ -n "$PACKAGE_VERSION_OVERRIDE" ]; then
-            version="$PACKAGE_VERSION_OVERRIDE"
-            if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-              echo "Version is not strict X.Y.Z: $version" >&2
-              exit 1
-            fi
-            if [ "$GITHUB_REF_TYPE" = tag ] && [ "$tag" != "v$version" ]; then
-              echo "Tag $tag differs from configured version v$version" >&2
-              exit 1
-            fi
-          else
-            if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-              echo "Tag is not strict vX.Y.Z: $tag" >&2
-              exit 1
-            fi
-            version="${tag#v}"
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "revision=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+        run: bash "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/release-version.sh"
       - name: Compare Nix package version
         env:
           VERSION: ${{ steps.version.outputs.version }}
