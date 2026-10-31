@@ -79,7 +79,18 @@ For Scoop, `scoop_bucket_repo` takes precedence over the caller repository's
 `SCOOP_BUCKET_REPO` Actions configuration variable. Setting a destination or
 credential alone never enables publication.
 
-When selected, tagged releases prepare and push the exact versioned WinGet and nixpkgs fork
+Package release versions accept `vX.Y.Z` and `vX.Y.Z-rc.N`, without leading zeroes. Candidate
+status is derived from that version, not a publication flag: candidates create
+non-latest GitHub prereleases and may publish version-tagged archives and images,
+but never publish Homebrew, Scoop, WinGet, Nixpkgs, Chocolatey or AUR updates or
+promote `latest`. Their preflight does not require those disabled channels'
+credentials; enabled Docker Hub publication still requires its credentials.
+Native/archive/checksum, generated-metadata installation and Nix-image smoke gates
+remain enabled when selected. Candidate reuse requires an existing non-draft,
+non-latest prerelease with matching immutable assets; metadata/API errors fail
+closed. Stable releases keep their selected channels and promotion behavior.
+
+When selected, stable tagged releases prepare and push the exact versioned WinGet and nixpkgs fork
 branches, but never open upstream pull requests. Callers use the separate
 submit-upstream-prs.yml reusable workflow from a thin workflow_dispatch caller
 to submit either prepared branch after it verifies a matching non-draft GitHub

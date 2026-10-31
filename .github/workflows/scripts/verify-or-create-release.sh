@@ -25,13 +25,30 @@ asset_manifest() {
   ) >"$output"
 }
 
+# shellcheck source=.github/workflows/scripts/release-version.sh
+source "$(dirname "${BASH_SOURCE[0]}")/release-version.sh"
+# shellcheck source=.github/workflows/scripts/candidate-release-metadata.sh
+source "$(dirname "${BASH_SOURCE[0]}")/candidate-release-metadata.sh"
+kind="$(release_version_kind "$VERSION")"
 tag="v$VERSION"
 release_metadata="$RUNNER_TEMP/release-metadata.json"
-if gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets,isDraft >"$release_metadata" 2>/dev/null; then
+release_exists=false
+if [[ "$kind" == candidate ]]; then
+  result=0
+  candidate_release_metadata "$tag" "$release_metadata" || result=$?
+  if [[ "$result" == 0 ]]; then
+    release_exists=true
+  elif [[ "$result" != 4 ]]; then
+    exit 1
+  fi
+elif gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets,isDraft >"$release_metadata" 2>/dev/null; then
+  release_exists=true
   if [ "$(jq -r '.isDraft' "$release_metadata")" != false ]; then
     echo "::error::Release $tag exists as a draft; refusing to replace or publish it." >&2
     exit 1
   fi
+fi
+if [[ "$release_exists" == true ]]; then
 
   existing_directory="$RUNNER_TEMP/existing-release-assets"
   mkdir -p "$existing_directory"
@@ -59,7 +76,12 @@ fi
 
 : "${RELEASE_TITLE_PREFIX:?Missing RELEASE_TITLE_PREFIX}"
 
-gh release create "$tag" "${assembled_assets[@]}" \
+release_args=()
+if [[ "$kind" == candidate ]]; then
+  release_args+=(--prerelease)
+fi
+
+gh release create "$tag" "${assembled_assets[@]}" "${release_args[@]}" \
   --repo "$GITHUB_REPOSITORY" \
   --verify-tag \
   --title "${RELEASE_TITLE_PREFIX} v${VERSION}" \

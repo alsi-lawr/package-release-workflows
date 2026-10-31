@@ -245,11 +245,22 @@ jobs:
       version: ${{ inputs.version }}
 
   credential-preflight:
-    name: Validate all enabled publication credentials
+    name: Validate effective publication policy and credentials
     runs-on: ubuntu-latest
+    outputs:
+      stable_channels: ${{ steps.policy.outputs.stable_channels }}
     steps:
-      - name: Fail before publication when an enabled channel lacks credentials
+      - name: Check out shared release workflow helpers
+        uses: actions/checkout@v7
+        with:
+          repository: alsi-lawr/package-release-workflows
+          ref: main
+          path: .shared-release-workflows
+          persist-credentials: false
+      - name: Fail before publication when an effective channel lacks credentials
+        id: policy
         env:
+          VERSION: ${{ inputs.version }}
           PACKAGE_REPOSITORY_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
           CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
@@ -268,48 +279,7 @@ jobs:
           AUR_PKGBUILD_PATH: ${{ inputs.aur_pkgbuild_path }}
           AUR_SRCINFO_PATH: ${{ inputs.aur_srcinfo_path }}
           PUBLISH_DOCKER_HUB: ${{ inputs.publish_docker_hub }}
-        run: |
-          set -euo pipefail
-
-          require_secret() {
-            local value="$1"
-            local name="$2"
-            if test -z "$value"; then
-              echo "::error::${name} is required by an enabled publication channel." >&2
-              return 1
-            fi
-          }
-
-          if [[ "$PUBLISH_HOMEBREW" == true || "$PUBLISH_SCOOP" == true || "$PUBLISH_WINGET" == true || "$PUBLISH_NIXPKGS" == true ]]; then
-            require_secret "$PACKAGE_REPOSITORY_TOKEN" PACKAGE_REPOSITORY_TOKEN
-          fi
-
-          if [[ "$PUBLISH_HOMEBREW" == true && -n "$BREW_CASK_PATH" && -z "$BREW_CASK_TAP_REPO" ]]; then
-            echo '::error::brew_cask_tap_repo is required to publish a supplied cask.' >&2
-            exit 1
-          fi
-
-          if [[ "$PUBLISH_SCOOP" == true && -z "$SCOOP_BUCKET_REPO" ]]; then
-            echo '::error::scoop_bucket_repo is required to publish a supplied manifest.' >&2
-            exit 1
-          fi
-
-          if [[ "$PUBLISH_CHOCOLATEY" == true ]]; then
-            require_secret "$CHOCOLATEY_API_KEY" CHOCOLATEY_API_KEY
-          fi
-
-          if [[ "$PUBLISH_AUR" == true ]]; then
-            require_secret "$AUR_SSH_PRIVATE_KEY" AUR_SSH_PRIVATE_KEY
-            if [[ -z "$AUR_PACKAGE_BASE" || -z "$AUR_PKGBUILD_PATH" || -z "$AUR_SRCINFO_PATH" ]]; then
-              echo '::error::AUR publication needs a package base, PKGBUILD path, and .SRCINFO path.' >&2
-              exit 1
-            fi
-          fi
-
-          if [[ "$PUBLISH_DOCKER_HUB" == true ]]; then
-            require_secret "$DOCKERHUB_USERNAME" DOCKERHUB_USERNAME
-            require_secret "$DOCKERHUB_TOKEN" DOCKERHUB_TOKEN
-          fi
+        run: bash "$GITHUB_WORKSPACE/.shared-release-workflows/.github/workflows/scripts/release-publication-policy.sh"
 
   package-tests:
     name: Test packaging install-and-smoke targets
@@ -347,11 +317,16 @@ jobs:
         (
           inputs.publish_github_release ||
           inputs.run_package_tests ||
-          inputs.publish_homebrew ||
-          inputs.publish_scoop ||
-          inputs.publish_winget ||
-          inputs.publish_chocolatey ||
-          inputs.publish_aur
+          (
+            needs.credential-preflight.outputs.stable_channels == 'true' &&
+            (
+              inputs.publish_homebrew ||
+              inputs.publish_scoop ||
+              inputs.publish_winget ||
+              inputs.publish_chocolatey ||
+              inputs.publish_aur
+            )
+          )
         )
       }}
     needs:
@@ -387,6 +362,7 @@ jobs:
     if: >-
       ${{
         always() &&
+        needs.credential-preflight.outputs.stable_channels == 'true' &&
         (inputs.publish_homebrew || inputs.publish_scoop || inputs.publish_winget) &&
         !failure() &&
         !cancelled()
@@ -537,7 +513,7 @@ jobs:
 
   publish-nixpkgs:
     name: Publish Nix package and prepare manual PR handoff
-    if: ${{ always() && inputs.publish_nixpkgs && !failure() && !cancelled() }}
+    if: ${{ always() && needs.credential-preflight.outputs.stable_channels == 'true' && inputs.publish_nixpkgs && !failure() && !cancelled() }}
     needs:
       - package-tests
       - validation
@@ -598,7 +574,7 @@ jobs:
 
   publish-chocolatey:
     name: Build and submit the Chocolatey package for moderation
-    if: ${{ always() && inputs.publish_chocolatey && !failure() && !cancelled() }}
+    if: ${{ always() && needs.credential-preflight.outputs.stable_channels == 'true' && inputs.publish_chocolatey && !failure() && !cancelled() }}
     needs:
       - package-tests
       - validation
@@ -645,7 +621,7 @@ jobs:
 
   publish-aur:
     name: Publish the AUR package
-    if: ${{ always() && inputs.publish_aur && !failure() && !cancelled() }}
+    if: ${{ always() && needs.credential-preflight.outputs.stable_channels == 'true' && inputs.publish_aur && !failure() && !cancelled() }}
     needs:
       - package-tests
       - validation
@@ -839,6 +815,7 @@ jobs:
     if: >-
       ${{
         always() &&
+        needs.credential-preflight.outputs.stable_channels == 'true' &&
         inputs.promote_latest &&
         (inputs.publish_github_release || inputs.publish_docker_hub || inputs.publish_nix_images) &&
         !failure() &&
